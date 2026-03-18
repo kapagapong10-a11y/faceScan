@@ -198,15 +198,18 @@
   </div>
 
   <script type="module">
-    // 🌟 ลิงก์ API ของคุณครู 🌟
+    // 🌟 ลิงก์ API ของ Google Apps Script 🌟
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw4tSjxsbNFDWB8PzxtxVfBzeAZGilmqdRlb1dxxfXTsoH6ZYIOXIB_YLhJrMKXgdg3/exec"; 
 
+    // ✅ นำเข้าไลบรารีของ Realtime Database (แทนที่ Firestore เดิม)
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, getDocs, addDoc, query, where, updateDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getDatabase, ref, set, push, get, child, update, query, orderByChild, equalTo, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCcbcchbHCjKwCw0xnNkqE42d7ZvK0g3Fk",
       authDomain: "scan-708a9.firebaseapp.com",
+      // เปลี่ยนแปลงให้แน่ใจว่าเรียก Realtime Database ได้ถูกต้อง
+      databaseURL: "https://scan-708a9-default-rtdb.firebaseio.com",
       projectId: "scan-708a9",
       storageBucket: "scan-708a9.firebasestorage.app",
       messagingSenderId: "461577898006",
@@ -215,7 +218,7 @@
     };
 
     const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    const db = getDatabase(app); // ✅ เรียกใช้งาน Realtime Database
     const { createApp } = Vue;
 
     createApp({
@@ -250,24 +253,25 @@
         }
       },
       methods: {
-        // --- ระบบตั้งค่าฐานข้อมูลอัตโนมัติ ---
+        // --- 1. ระบบตั้งค่าฐานข้อมูลอัตโนมัติ (Realtime DB) ---
         async autoSetupDatabase() {
           try {
-            const q = query(collection(db, "teachers"), where("username", "==", "admin"));
-            const snap = await getDocs(q);
-            if (snap.empty) {
-              await addDoc(collection(db, "teachers"), { username: "admin", password: "1234", name: "ผู้ดูแลระบบ", role: "admin", classLevel: "all" });
-              console.log("Firebase Setup Success");
+            const adminQuery = query(ref(db, 'teachers'), orderByChild('username'), equalTo('admin'));
+            const snap = await get(adminQuery);
+            if (!snap.exists()) {
+              await push(ref(db, 'teachers'), { 
+                username: "admin", 
+                password: "1234", 
+                name: "ผู้ดูแลระบบ", 
+                role: "admin", 
+                classLevel: "all" 
+              });
+              console.log("Realtime Database Auto-Setup Success");
             }
           } catch(e) { 
             console.error("Firebase Setup Error:", e); 
-            // แจ้งเตือนถ้า Rules ของ Firebase ถูกบล็อก
-            if(e.message.includes("permission")) {
-               Swal.fire({
-                 icon: 'error',
-                 title: 'ฐานข้อมูล Firebase ถูกบล็อก',
-                 text: 'ข้อมูลไม่สามารถบันทึกได้ กรุณาไปที่เว็บ Firebase > Firestore > Rules แล้วเปลี่ยนเป็น allow read, write: if true;'
-               });
+            if(e.message.includes("permission_denied")) {
+               Swal.fire('ฐานข้อมูลถูกบล็อก', 'กรุณาตั้งค่า Rules เป็น true ในเมนู Realtime Database ก่อนครับ', 'error');
             }
           }
         },
@@ -277,6 +281,7 @@
           this.currentTab = 'menu';
         },
 
+        // --- 2. โหลดข้อมูลนักเรียนทั้งหมดสำหรับ AI ---
         async startScanSystem(videoId, isRegistration = false) {
           this.isAiLoading = true;
           try {
@@ -288,15 +293,18 @@
             ]);
 
             if (!isRegistration) {
-              const studentsSnap = await getDocs(collection(db, "students"));
+              const snap = await get(ref(db, 'students'));
               const labeledDescriptors = [];
-              studentsSnap.forEach(doc => {
-                const data = doc.data();
-                if(data.descriptor) {
-                  const desc = new Float32Array(JSON.parse(data.descriptor));
-                  labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(data.id, [desc]));
-                }
-              });
+              if (snap.exists()) {
+                const studentsData = snap.val();
+                Object.keys(studentsData).forEach(key => {
+                  const data = studentsData[key];
+                  if(data.descriptor) {
+                    const desc = new Float32Array(JSON.parse(data.descriptor));
+                    labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(data.id, [desc]));
+                  }
+                });
+              }
               if(labeledDescriptors.length > 0) this.faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
             }
             await this.startVideo(videoId, isRegistration);
@@ -340,27 +348,47 @@
           if(this.scanInterval) clearInterval(this.scanInterval);
         },
 
+        // --- 3. บันทึกเช็คชื่อ (Realtime DB) ---
         async processAttendance(studentId) {
           const now = Date.now();
           if (this.cooldowns[studentId] && (now - this.cooldowns[studentId] < 60000)) return; 
           this.cooldowns[studentId] = now;
 
           try {
-            const q = query(collection(db, "students"), where("id", "==", studentId));
-            const snap = await getDocs(q);
-            if (snap.empty) return;
+            const studentQuery = query(ref(db, 'students'), orderByChild('id'), equalTo(studentId));
+            const snap = await get(studentQuery);
+            if (!snap.exists()) return;
             
-            const studentData = snap.docs[0].data();
+            let studentData;
+            snap.forEach(child => { studentData = child.val(); });
+
             const today = new Date();
             const timeStr = today.toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
             const dateStr = today.toISOString().split('T')[0];
             const status = timeStr > "08:30" ? "มาสาย" : "มาปกติ";
 
-            const attQuery = query(collection(db, "attendance"), where("studentId", "==", studentId), where("date", "==", dateStr));
-            const attSnap = await getDocs(attQuery);
+            // ป้องกันเช็คซ้ำ
+            const attQuery = query(ref(db, 'attendance'), orderByChild('studentId'), equalTo(studentId));
+            const attSnap = await get(attQuery);
+            let hasCheckedIn = false;
             
-            if (attSnap.empty) {
-              await addDoc(collection(db, "attendance"), { studentId: studentId, name: studentData.name, classLevel: studentData.classLevel, date: dateStr, time: timeStr, status: status, timestamp: serverTimestamp() });
+            if (attSnap.exists()) {
+               attSnap.forEach(child => {
+                  if(child.val().date === dateStr) hasCheckedIn = true;
+               });
+            }
+            
+            if (!hasCheckedIn) {
+              await push(ref(db, 'attendance'), { 
+                studentId: studentId, 
+                name: studentData.name, 
+                classLevel: studentData.classLevel, 
+                date: dateStr, 
+                time: timeStr, 
+                status: status, 
+                timestamp: serverTimestamp() 
+              });
+              
               this.recentScans.unshift({ id: Date.now(), name: studentData.name, time: timeStr, status: status });
               if(this.recentScans.length > 20) this.recentScans.pop();
 
@@ -375,63 +403,98 @@
           } catch(e) { console.error(e); }
         },
 
+        // --- 4. ระบบ Login (Realtime DB) ---
         async handleLogin(role) {
           if(!this.loginData.username || !this.loginData.password) return Swal.fire('แจ้งเตือน', 'กรุณากรอกข้อมูล', 'warning');
           Swal.fire({ title: 'ตรวจสอบ...', didOpen: () => Swal.showLoading() });
           try {
             if (role === 'parent') {
-              const q = query(collection(db, "students"), where("id", "==", this.loginData.username), where("parentPassword", "==", this.loginData.password));
-              const snap = await getDocs(q);
-              if (!snap.empty) {
-                const docData = snap.docs[0];
-                this.currentUser = { role: 'parent', docId: docData.id, name: docData.data().name, studentData: docData.data() };
-                this.telegramChatId = docData.data().telegramChatId || '';
-                this.currentTab = 'parentDashboard';
-                Swal.close();
-              } else Swal.fire('ผิดพลาด', 'รหัสผ่านไม่ถูกต้อง', 'error');
+              const q = query(ref(db, 'students'), orderByChild('id'), equalTo(this.loginData.username));
+              const snap = await get(q);
+              if (snap.exists()) {
+                let found = false;
+                snap.forEach(child => {
+                   const data = child.val();
+                   if(data.parentPassword === this.loginData.password) {
+                      this.currentUser = { role: 'parent', docId: child.key, name: data.name, studentData: data };
+                      this.telegramChatId = data.telegramChatId || '';
+                      this.currentTab = 'parentDashboard';
+                      found = true;
+                   }
+                });
+                if(found) Swal.close(); else Swal.fire('ผิดพลาด', 'รหัสผ่านไม่ถูกต้อง', 'error');
+              } else Swal.fire('ผิดพลาด', 'ไม่พบรหัสนักเรียน', 'error');
+
             } else if (role === 'teacher') {
-              const q = query(collection(db, "teachers"), where("username", "==", this.loginData.username), where("password", "==", this.loginData.password));
-              const snap = await getDocs(q);
-              if (!snap.empty) {
-                const docData = snap.docs[0].data();
-                this.currentUser = { role: docData.role, name: docData.name, classLevel: docData.classLevel };
-                this.currentTab = 'teacherDashboard';
-                this.loadTeacherClass();
-                Swal.close();
-              } else Swal.fire('ผิดพลาด', 'รหัสผ่านไม่ถูกต้อง', 'error');
+              const q = query(ref(db, 'teachers'), orderByChild('username'), equalTo(this.loginData.username));
+              const snap = await get(q);
+              if (snap.exists()) {
+                let found = false;
+                snap.forEach(child => {
+                   const data = child.val();
+                   if(data.password === this.loginData.password) {
+                      this.currentUser = { role: data.role, name: data.name, classLevel: data.classLevel };
+                      this.currentTab = 'teacherDashboard';
+                      this.loadTeacherClass();
+                      found = true;
+                   }
+                });
+                if(found) Swal.close(); else Swal.fire('ผิดพลาด', 'รหัสผ่านไม่ถูกต้อง', 'error');
+              } else Swal.fire('ผิดพลาด', 'ไม่พบชื่อผู้ใช้', 'error');
             }
           } catch(e) { Swal.fire('Error', e.message, 'error'); }
         },
 
         async updateTelegram() {
           if(!this.telegramChatId) return;
-          const docRef = doc(db, "students", this.currentUser.docId);
-          await updateDoc(docRef, { telegramChatId: this.telegramChatId });
+          await update(ref(db, 'students/' + this.currentUser.docId), { telegramChatId: this.telegramChatId });
           Swal.fire('สำเร็จ', 'บันทึก Telegram แล้ว', 'success');
         },
 
+        // --- 5. ระบบครู / แอดมิน (Realtime DB) ---
         async loadTeacherClass() {
-          let q = (this.currentUser.role === 'admin') ? query(collection(db, "students")) : query(collection(db, "students"), where("classLevel", "==", this.currentUser.classLevel));
-          const snap = await getDocs(q);
-          const students = [];
+          const snap = await get(ref(db, 'students'));
+          if(!snap.exists()) { this.myClassStudents = []; return; }
+          
+          let students = [];
           const todayStr = new Date().toISOString().split('T')[0];
-          for (const docSnap of snap.docs) {
-            let sData = docSnap.data();
-            const attQ = query(collection(db, "attendance"), where("studentId", "==", sData.id), where("date", "==", todayStr));
-            const attSnap = await getDocs(attQ);
-            sData.todayStatus = attSnap.empty ? null : attSnap.docs[0].data().status;
-            students.push(sData);
+          
+          snap.forEach(child => {
+             const sData = child.val();
+             if(this.currentUser.role === 'admin' || sData.classLevel === this.currentUser.classLevel) {
+                 students.push(sData);
+             }
+          });
+
+          // ดึงข้อมูลเช็คชื่อของวันนี้
+          const attSnap = await get(ref(db, 'attendance'));
+          if (attSnap.exists()) {
+             const attData = [];
+             attSnap.forEach(c => {
+                 if(c.val().date === todayStr) attData.push(c.val());
+             });
+             
+             students = students.map(s => {
+                 const record = attData.find(a => a.studentId === s.id);
+                 s.todayStatus = record ? record.status : null;
+                 return s;
+             });
           }
+          
           this.myClassStudents = students.sort((a,b) => parseInt(a.number) - parseInt(b.number));
         },
 
         async markStatus(student, status) {
           const todayStr = new Date().toISOString().split('T')[0];
-          await addDoc(collection(db, "attendance"), { studentId: student.id, name: student.name, classLevel: student.classLevel, date: todayStr, time: "-", status: status, timestamp: serverTimestamp() });
+          await push(ref(db, 'attendance'), { 
+              studentId: student.id, name: student.name, classLevel: student.classLevel, 
+              date: todayStr, time: "-", status: status, timestamp: serverTimestamp() 
+          });
           student.todayStatus = status;
           Swal.fire({ toast:true, position:'top-end', icon:'success', title: `บันทึก ${status}`, showConfirmButton:false, timer:2000 });
         },
 
+        // --- 6. แอดมินเพิ่มรูปและข้อมูล (Realtime DB) ---
         async captureAndRegister() {
           if(!this.newStudent.id || !this.newStudent.name || !this.newStudent.classLevel) {
              return Swal.fire('เตือน', 'กรอกข้อมูลให้ครบ', 'warning');
@@ -458,7 +521,7 @@
             const imageBase64 = canvas.toDataURL('image/jpeg', 0.6); 
             const descriptorJson = JSON.stringify(Array.from(detections.descriptor));
 
-            // โยนภาพไปให้ GAS อัปโหลดลง Drive (เอา header ออกเพื่อป้องกันปัญหา CORS)
+            // โยนภาพไปให้ GAS อัปโหลดลง Drive
             const response = await fetch(GAS_API_URL, {
               method: 'POST',
               body: JSON.stringify({ action: 'uploadImage', base64: imageBase64, fileName: this.newStudent.id + "_" + this.newStudent.name })
@@ -469,9 +532,16 @@
 
             Swal.fire({ title: '3/3: กำลังบันทึกข้อมูลเข้าฐานข้อมูล...', text: 'รอสักครู่...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
-            // บันทึกเข้า Firebase
-            await addDoc(collection(db, "students"), {
-              id: this.newStudent.id, name: this.newStudent.name, classLevel: this.newStudent.classLevel, number: this.newStudent.number, parentPassword: "1234", descriptor: descriptorJson, imageUrl: res.url, telegramChatId: ""
+            // บันทึกเข้า Realtime Database
+            await push(ref(db, 'students'), {
+              id: this.newStudent.id, 
+              name: this.newStudent.name, 
+              classLevel: this.newStudent.classLevel, 
+              number: this.newStudent.number, 
+              parentPassword: "1234", 
+              descriptor: descriptorJson, 
+              imageUrl: res.url, 
+              telegramChatId: ""
             });
 
             Swal.fire('สำเร็จ', 'บันทึกข้อมูลและใบหน้าเรียบร้อย', 'success');
@@ -480,8 +550,8 @@
 
           } catch(e) {
             console.error(e);
-            if(e.message.includes("permission")) {
-              Swal.fire('ฐานข้อมูล Firebase ถูกบล็อก', 'คุณยังไม่ได้เปิดสิทธิ์ Firestore Rules (ทำตามขั้นตอนที่ 1 ที่ผมแจ้งไปครับ)', 'error');
+            if(e.message.includes("permission_denied")) {
+              Swal.fire('ฐานข้อมูลถูกบล็อก', 'คุณยังไม่ได้เปิดสิทธิ์ Rules ในเมนู Realtime Database ครับ', 'error');
             } else {
               Swal.fire('เกิดข้อผิดพลาด', e.message, 'error');
             }
