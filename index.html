@@ -931,8 +931,12 @@ const myApp = createApp({
                 const sArr = [];
                 const tArr = [];
                 
-                if(sSnap.exists()) sSnap.forEach(c => sArr.push({ key: c.key, ...c.val() }));
-                if(tSnap.exists()) tSnap.forEach(c => tArr.push({ key: c.key, ...c.val() }));
+                if(sSnap.exists()) {
+                    sSnap.forEach(c => { sArr.push({ key: c.key, ...c.val() }); });
+                }
+                if(tSnap.exists()) {
+                    tSnap.forEach(c => { tArr.push({ key: c.key, ...c.val() }); });
+                }
 
                 // ใส่ String() ห่อตัวแปรเพื่อป้องกันจอค้างจากข้อมูลที่เป็น Number (Bug fix)
                 this.adminData.students = sArr.sort((a,b) => {
