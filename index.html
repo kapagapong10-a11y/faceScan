@@ -21,7 +21,7 @@
 </head>
 <body>
   <div id="app" class="min-h-screen flex flex-col">
-    <nav class="bg-indigo-700 text-white shadow-md p-4 flex justify-between items-center">
+    <nav class="bg-indigo-700 text-white shadow-md p-4 flex justify-between items-center z-20">
       <div class="font-bold text-xl cursor-pointer flex items-center gap-2" @click="goToMenu">
         <i class="fa-solid fa-school text-2xl"></i> ระบบเช็คชื่อ วังน้ำเย็นวิทยาคม
       </div>
@@ -60,7 +60,20 @@
             <div class="camera-container shadow-2xl border-4 border-gray-800 relative">
               <video id="videoInput" autoplay muted playsinline></video>
               <canvas id="overlay" class="overlay"></canvas>
-              <div v-if="isAiLoading" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-white z-10">
+              
+              <div v-if="!isAiLoading" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+                <div class="w-48 h-64 sm:w-64 sm:h-80 border-2 border-dashed border-green-400 rounded-[50px] relative animate-[pulse_2s_ease-in-out_infinite] mb-6">
+                  <div class="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-green-500 rounded-tl-[40px]"></div>
+                  <div class="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-green-500 rounded-tr-[40px]"></div>
+                  <div class="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-green-500 rounded-bl-[40px]"></div>
+                  <div class="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-green-500 rounded-br-[40px]"></div>
+                </div>
+                <div class="bg-black/60 text-white px-5 py-2.5 rounded-full text-sm font-bold backdrop-blur-md shadow-lg border border-white/20">
+                   <i class="fa-solid fa-expand"></i> กรุณาวางใบหน้าให้อยู่ในกรอบ
+                </div>
+              </div>
+
+              <div v-if="isAiLoading" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-white z-20">
                  <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500 mb-4"></div>
                  <p class="text-xl font-bold animate-pulse">กำลังโหลดระบบ AI กรุณารอสักครู่...</p>
               </div>
@@ -110,11 +123,6 @@
             <input v-model="telegramChatId" placeholder="ใส่ Chat ID ของคุณ" class="border-2 p-3 rounded-xl w-full outline-none focus:ring-2 focus:ring-blue-400">
             <button @click="updateTelegram" class="bg-blue-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 shadow-lg whitespace-nowrap">บันทึก ID</button>
           </div>
-          <h3 class="font-bold text-lg mb-4 text-gray-800"><i class="fa-solid fa-key text-orange-500 mr-2"></i> เปลี่ยนรหัสผ่าน</h3>
-          <div class="flex flex-col sm:flex-row gap-3">
-            <input type="password" v-model="newPassword" placeholder="รหัสผ่านใหม่" class="border-2 p-3 rounded-xl w-full outline-none focus:ring-2 focus:ring-orange-400">
-            <button @click="updatePassword" class="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 shadow-lg whitespace-nowrap">เปลี่ยนรหัส</button>
-          </div>
         </div>
       </div>
 
@@ -139,11 +147,16 @@
                 <input v-model="newStudent.number" placeholder="เลขที่" class="w-full border-2 p-3 rounded-xl focus:ring-2 outline-none">
               </div>
             </div>
+            
             <div class="flex flex-col items-center bg-gray-50 p-4 rounded-xl border-2 border-dashed border-gray-300">
-               <div class="w-full max-w-[200px] aspect-square bg-black rounded-lg overflow-hidden mb-3 relative">
+               <div class="w-full max-w-[220px] aspect-[3/4] bg-black rounded-2xl overflow-hidden mb-4 relative shadow-xl border-4 border-indigo-100">
                  <video id="adminVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
+                 <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+                   <div class="w-[70%] h-[60%] border-2 border-dashed border-indigo-300 rounded-[50%] animate-pulse relative shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"></div>
+                   <p class="text-white text-xs bg-indigo-600/80 px-3 py-1.5 rounded-full mt-4 shadow-lg backdrop-blur-sm border border-indigo-400">มองกล้องให้ชัดเจน</p>
+                 </div>
                </div>
-               <button @click="captureAndRegister" class="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 shadow w-full">บันทึกใบหน้าและข้อมูล</button>
+               <button @click="captureAndRegister" class="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 shadow-lg w-full transition text-lg"><i class="fa-solid fa-camera"></i> บันทึกใบหน้าและข้อมูล</button>
             </div>
           </div>
         </div>
@@ -183,13 +196,12 @@
   </div>
 
   <script type="module">
-    // ใส่ URL ที่ได้จากขั้นตอนที่ 1 ตรงนี้
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw4tSjxsbNFDWB8PzxtxVfBzeAZGilmqdRlb1dxxfXTsoH6ZYIOXIB_YLhJrMKXgdg3/exec"; 
+    // !! วาง URL ของ Web App (GAS) ของคุณที่นี่ !!
+    const GAS_API_URL = "ใส่_URL_WEB_APP_ที่นี่"; 
 
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, getDocs, addDoc, query, where, updateDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // ข้อมูล Firebase ของคุณ
     const firebaseConfig = {
       apiKey: "AIzaSyCcbcchbHCjKwCw0xnNkqE42d7ZvK0g3Fk",
       authDomain: "scan-708a9.firebaseapp.com",
@@ -219,7 +231,6 @@
           cooldowns: {}, 
           
           telegramChatId: '',
-          newPassword: '',
           myClassStudents: [],
           newStudent: { id: '', name: '', classLevel: '', number: '' }
         }
@@ -294,11 +305,11 @@
 
                 this.scanInterval = setInterval(async () => {
                   if(this.currentTab !== 'scan') return;
-                  const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors();
+                  // ปรับความเร็วในการตรวจจับ (inputSize เล็กลง = เร็วขึ้น)
+                  const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks().withFaceDescriptors();
                   const resizedDetections = faceapi.resizeResults(detections, displaySize);
                   canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-                  faceapi.draw.drawDetections(canvas, resizedDetections);
-
+                  
                   if (resizedDetections.length > 0 && this.faceMatcher) {
                     resizedDetections.forEach(det => {
                       const bestMatch = this.faceMatcher.findBestMatch(det.descriptor);
@@ -340,7 +351,6 @@
               this.recentScans.unshift({ id: Date.now(), name: studentData.name, time: timeStr, status: status });
               if(this.recentScans.length > 20) this.recentScans.pop();
 
-              // ส่งเข้า API GAS ด้วย Fetch
               if(studentData.telegramChatId) {
                 const msg = `🔔 <b>แจ้งเตือนการเข้าเรียน</b>\nนักเรียน: ${studentData.name}\nเวลา: ${timeStr} น.\nสถานะ: ${status}`;
                 fetch(GAS_API_URL, {
@@ -386,14 +396,6 @@
           await updateDoc(docRef, { telegramChatId: this.telegramChatId });
           Swal.fire('สำเร็จ', 'บันทึก Telegram แล้ว', 'success');
         },
-        async updatePassword() {
-          if(!this.newPassword) return;
-          const docRef = doc(db, "students", this.currentUser.docId);
-          await updateDoc(docRef, { parentPassword: this.newPassword });
-          this.currentUser.studentData.parentPassword = this.newPassword;
-          this.newPassword = '';
-          Swal.fire('สำเร็จ', 'เปลี่ยนรหัสผ่านแล้ว', 'success');
-        },
 
         async loadTeacherClass() {
           let q = (this.currentUser.role === 'admin') ? query(collection(db, "students")) : query(collection(db, "students"), where("classLevel", "==", this.currentUser.classLevel));
@@ -417,17 +419,27 @@
           Swal.fire({ toast:true, position:'top-end', icon:'success', title: `บันทึก ${status}`, showConfirmButton:false, timer:2000 });
         },
 
+        // ส่วนที่แก้ไขระบบบีบอัดรูป เพื่อความไวเหมือนเวอร์ชั่นก่อน
         async captureAndRegister() {
           if(!this.newStudent.id || !this.newStudent.name || !this.newStudent.classLevel) return Swal.fire('เตือน', 'กรอกข้อมูลให้ครบ', 'warning');
-          Swal.fire({ title: 'กำลังประมวลผล...', didOpen: () => Swal.showLoading() });
+          Swal.fire({ title: 'กำลังประมวลผล...', text: 'กรุณามองกล้องนิ่งๆ สักครู่', didOpen: () => Swal.showLoading() });
+          
           try {
             const video = document.getElementById('adminVideo');
-            const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
-            if(!detections) return Swal.fire('ไม่พบใบหน้า', 'มองกล้องให้ชัดเจน', 'error');
+            // เร่งความเร็วการตรวจจับใบหน้า
+            const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks().withFaceDescriptor();
+            
+            if(!detections) return Swal.fire('ไม่พบใบหน้า', 'กรุณาขยับหน้าให้อยู่ในกรอบและมีแสงสว่างเพียงพอ', 'error');
 
-            const canvas = document.createElement('canvas'); canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0); 
-            const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+            // --- ระบบบีบอัดรูปภาพ (บีบไซส์ให้เล็กลงเหมือนโค้ดเดิม) ---
+            const canvas = document.createElement('canvas'); 
+            const MAX_WIDTH = 400; // ลดขนาดลงเพื่อความไวในการส่ง API
+            const scale = MAX_WIDTH / video.videoWidth;
+            canvas.width = MAX_WIDTH; 
+            canvas.height = video.videoHeight * scale;
+            
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height); 
+            const imageBase64 = canvas.toDataURL('image/jpeg', 0.6); // บีบอัดคุณภาพรูป
             const descriptorJson = JSON.stringify(Array.from(detections.descriptor));
 
             // โยนไฟล์ให้ GAS อัปโหลดลง Drive ผ่าน Fetch
@@ -441,7 +453,7 @@
               await addDoc(collection(db, "students"), {
                 id: this.newStudent.id, name: this.newStudent.name, classLevel: this.newStudent.classLevel, number: this.newStudent.number, parentPassword: "1234", descriptor: descriptorJson, imageUrl: res.url, telegramChatId: ""
               });
-              Swal.fire('สำเร็จ', 'บันทึกเรียบร้อย', 'success');
+              Swal.fire('สำเร็จ', 'บันทึกข้อมูลและใบหน้าเรียบร้อย', 'success');
               this.newStudent = { id: '', name: '', classLevel: '', number: '' };
               this.loadTeacherClass(); 
             } else Swal.fire('Error', 'เซฟรูปลง Drive ไม่สำเร็จ', 'error');
