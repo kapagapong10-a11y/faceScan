@@ -390,8 +390,6 @@
               this.recentScans.unshift({ id: Date.now(), name: studentData.name, time: timeStr, status: status });
               if(this.recentScans.length > 20) this.recentScans.pop();
 
-              if(studentData.telegramChatId) {
-                const msg = `🔔 <b>แจ้งเตือนการเข้าเรียน</b>\nนักเรียน: ${studentData.name}\nเวลา: ${timeStr} น.\nสถานะ: ${status}`;
                 if(studentData.telegramChatId) {
             const msg = `🔔 <b>แจ้งเตือนการเข้าเรียน</b>\nนักเรียน: ${studentData.name}\nเวลา: ${timeStr} น.\nสถานะ: ${status}`;
             
