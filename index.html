@@ -18,7 +18,7 @@
     <style>
         body { font-family: 'Sarabun', sans-serif; background-color: #f0f2f5; }
         
-        /* ซ่อน Element จนกว่า Vue จะโหลดเสร็จ ป้องกันหน้าจอเละ */
+        /* ซ่อน Element จนกว่า Vue จะโหลดเสร็จ */
         [v-cloak] { display: none !important; }
 
         .list-move, .list-enter-active, .list-leave-active { transition: all 0.5s ease; }
@@ -37,9 +37,8 @@
     </style>
 </head>
 <body>
-<!-- ใส่ v-cloak ตรงนี้ -->
 <div id="app" class="min-h-screen flex flex-col" v-cloak>
-    <!-- Navbar -->
+    <!-- ================= NAVBAR ================= -->
     <nav class="bg-indigo-700 text-white shadow-md p-4 flex justify-between items-center z-20 sticky top-0">
         <div class="font-bold text-xl cursor-pointer flex items-center gap-2" @click="goToMenu">
             <i class="fa-solid fa-school text-2xl"></i> ระบบเช็คชื่อ วังน้ำเย็นวิทยาคม
@@ -65,7 +64,7 @@
             <div @click="currentTab = 'parentLogin'" class="bg-white p-8 rounded-2xl shadow-lg text-center cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition border-t-4 border-green-500 group">
                 <i class="fa-solid fa-users text-6xl text-green-500 mb-4 group-hover:scale-110 transition"></i>
                 <h2 class="text-xl font-bold text-gray-800">ระบบผู้ปกครอง</h2>
-                <p class="text-gray-500 text-sm mt-2">ดูสถิติและตั้งค่า Telegram</p>
+                <p class="text-gray-500 text-sm mt-2">ดูสถิติและตั้งค่าระบบ</p>
             </div>
             <div @click="currentTab = 'teacherLogin'" class="bg-white p-8 rounded-2xl shadow-lg text-center cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition border-t-4 border-orange-500 group">
                 <i class="fa-solid fa-chalkboard-user text-6xl text-orange-500 mb-4 group-hover:scale-110 transition"></i>
@@ -141,7 +140,7 @@
         <!-- Parent Login -->
         <div v-if="currentTab === 'parentLogin'" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-3xl shadow-xl border-t-8 border-green-500">
             <h2 class="text-2xl font-bold text-center mb-6 text-gray-800"><i class="fa-solid fa-users text-green-500"></i> เข้าสู่ระบบผู้ปกครอง</h2>
-            <input v-model="loginData.username" placeholder="รหัสประจำตัวนักเรียน" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-4 text-lg outline-none focus:ring-2 focus:ring-green-400">
+            <input v-model="loginData.username" placeholder="รหัสประจำตัวนักเรียน หรือ ชื่อผู้ใช้" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-4 text-lg outline-none focus:ring-2 focus:ring-green-400">
             <input type="password" v-model="loginData.password" placeholder="รหัสผ่าน" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-6 text-lg outline-none focus:ring-2 focus:ring-green-400" @keyup.enter="handleLogin('parent')">
             <button @click="handleLogin('parent')" class="w-full bg-green-500 text-white py-3.5 rounded-xl font-bold hover:bg-green-600 text-lg shadow-lg transition">เข้าสู่ระบบ</button>
             <button @click="goToMenu" class="w-full mt-4 text-gray-400 hover:text-gray-600 underline">กลับเมนูหลัก</button>
@@ -166,65 +165,123 @@
         </div>
 
         <!-- ================= PARENT DASHBOARD ================= -->
-        <div v-if="currentTab === 'parentDashboard'" class="max-w-3xl mx-auto space-y-6 mt-6">
-            <div class="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 relative">
-                <h2 class="text-2xl font-bold mb-6 text-gray-800"><i class="fa-solid fa-user-graduate text-green-500"></i> ข้อมูลนักเรียน: {{ currentUser.studentData.name }}</h2>
-                <div class="grid grid-cols-2 gap-6 mb-6 bg-gray-50 p-6 rounded-xl text-gray-700 border border-gray-200">
-                    <div><span class="text-gray-400 text-sm block mb-1">รหัสประจำตัว</span><span class="font-bold text-xl">{{ currentUser.studentData.id }}</span></div>
-                    <div><span class="text-gray-400 text-sm block mb-1">ชั้น / เลขที่</span><span class="font-bold text-xl">ม.{{ currentUser.studentData.classLevel }} / {{ currentUser.studentData.number }}</span></div>
+        <div v-if="currentTab === 'parentDashboard'" class="max-w-5xl mx-auto space-y-6 mt-6">
+            <div class="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+                <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fa-solid fa-user-graduate text-green-500"></i> สถิติการเข้าเรียน: {{ currentUser.studentData.name }}
+                </h2>
+                <div class="flex gap-2">
+                    <button @click="loadParentData" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2 rounded-lg font-bold transition flex items-center gap-2">
+                        <i class="fa-solid fa-rotate-right"></i> รีเฟรช
+                    </button>
+                    <button @click="openParentSettings" class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg font-bold transition flex items-center gap-2 shadow-md">
+                        <i class="fa-solid fa-gear"></i> ตั้งค่าระบบ
+                    </button>
                 </div>
-                <hr class="my-6 border-gray-200">
-                <h3 class="font-bold text-lg mb-4 text-gray-800 flex items-center">
-                    <i class="fa-brands fa-telegram text-blue-500 text-2xl mr-3"></i> ตั้งค่าการแจ้งเตือน Telegram
-                </h3>
-                <div class="flex flex-col sm:flex-row gap-3 mb-2">
-                    <input v-model="telegramChatId" placeholder="ใส่ Chat ID ของคุณ" class="border-2 p-3 rounded-xl w-full outline-none focus:ring-2 focus:ring-blue-400">
-                    <button @click="updateTelegram" class="bg-blue-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 shadow-lg whitespace-nowrap transition">บันทึก ID</button>
+            </div>
+
+            <!-- Stats Widgets -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl shadow-md border-l-4 border-green-500 flex flex-col items-center justify-center">
+                    <span class="text-gray-500 text-sm font-bold mb-1">มาปกติ</span>
+                    <span class="text-3xl font-extrabold text-green-600">{{ parentData.stats.normal }}</span>
                 </div>
-                <p class="text-sm text-gray-500 mt-2"><i class="fa-solid fa-circle-info"></i> แจ้งเตือนเมื่อนักเรียนสแกนหน้าเข้าเรียนสำเร็จ</p>
+                <div class="bg-white p-5 rounded-2xl shadow-md border-l-4 border-orange-500 flex flex-col items-center justify-center">
+                    <span class="text-gray-500 text-sm font-bold mb-1">มาสาย</span>
+                    <span class="text-3xl font-extrabold text-orange-500">{{ parentData.stats.late }}</span>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-md border-l-4 border-yellow-500 flex flex-col items-center justify-center">
+                    <span class="text-gray-500 text-sm font-bold mb-1">ลา</span>
+                    <span class="text-3xl font-extrabold text-yellow-600">{{ parentData.stats.leave }}</span>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-md border-l-4 border-red-500 flex flex-col items-center justify-center">
+                    <span class="text-gray-500 text-sm font-bold mb-1">ขาด</span>
+                    <span class="text-3xl font-extrabold text-red-600">{{ parentData.stats.absent }}</span>
+                </div>
+            </div>
+
+            <!-- History Table -->
+            <div class="bg-white rounded-3xl shadow-lg border-t-8 border-green-500 overflow-hidden">
+                <div class="p-6 border-b border-gray-100">
+                    <h3 class="font-bold text-lg text-gray-800"><i class="fa-solid fa-clock-rotate-left mr-2"></i> ประวัติการเข้าเรียนรายวัน</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 text-gray-700 border-b">
+                                <th class="p-4 font-bold text-center">วันที่</th>
+                                <th class="p-4 font-bold">ชื่อ-นามสกุล</th>
+                                <th class="p-4 font-bold text-center">เวลามา</th>
+                                <th class="p-4 font-bold text-center">สถานะ</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr v-for="record in parentData.history" :key="record.key" class="hover:bg-green-50 transition">
+                                <td class="p-4 text-center text-gray-600">{{ formatDate(record.date) }}</td>
+                                <td class="p-4 font-bold text-gray-800">{{ record.name }}</td>
+                                <td class="p-4 text-center font-bold" :class="record.time !== '-' ? 'text-gray-800' : 'text-gray-400'">{{ record.time }}</td>
+                                <td class="p-4 text-center font-bold" :class="getStatusColor(record.status)">{{ record.status }}</td>
+                            </tr>
+                            <tr v-if="parentData.history.length === 0">
+                                <td colspan="4" class="p-8 text-center text-gray-500">ยังไม่มีประวัติการเข้าเรียน</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
         <!-- ================= TEACHER DASHBOARD ================= -->
         <div v-if="currentTab === 'teacherDashboard'" class="space-y-6 mt-6">
             <div class="bg-white p-6 md:p-8 rounded-3xl shadow-lg border-t-8 border-orange-500 overflow-hidden relative">
-                <div class="flex justify-between items-center mb-6 border-b pb-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4 gap-4">
                     <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-list-check text-orange-500 mr-2"></i> เช็คชื่อนักเรียนชั้น ม.{{ currentUser.classLevel }}</h2>
-                    <span class="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-bold">วันที่: {{ new Date().toLocaleDateString('th-TH') }}</span>
+                    <div class="flex items-center gap-3">
+                        <span class="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-bold">วันที่: {{ new Date().toLocaleDateString('th-TH') }}</span>
+                        <button @click="loadTeacherClass" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2 rounded-lg font-bold transition flex items-center gap-2 shadow-sm">
+                            <i class="fa-solid fa-rotate-right"></i> รีเฟรช
+                        </button>
+                    </div>
                 </div>
                 
                 <div class="overflow-x-auto rounded-xl border border-gray-200">
-                    <table class="w-full text-left border-collapse">
+                    <table class="w-full text-left border-collapse whitespace-nowrap">
                         <thead>
                             <tr class="bg-gray-100 text-gray-700 border-b border-gray-200">
-                                <th class="p-4 font-bold w-20">เลขที่</th>
-                                <th class="p-4 font-bold w-32">รหัส</th>
-                                <th class="p-4 font-bold">ชื่อ - นามสกุล</th>
-                                <th class="p-4 font-bold w-40">สถานะวันนี้</th>
-                                <th class="p-4 font-bold text-center w-48">จัดการ</th>
+                                <th class="p-4 font-bold text-center">เลขประจำตัว</th>
+                                <th class="p-4 font-bold">ชื่อ-นามสกุล</th>
+                                <th class="p-4 font-bold text-center">ชั้น</th>
+                                <th class="p-4 font-bold text-center w-20">เลขที่</th>
+                                <th class="p-4 font-bold text-center">เวลามา</th>
+                                <th class="p-4 font-bold text-center">สถานะวันนี้</th>
+                                <th class="p-4 font-bold text-center w-40">จัดการ</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
                             <tr v-for="student in myClassStudents" :key="student.id" class="hover:bg-orange-50 transition">
-                                <td class="p-4 text-center font-bold text-gray-500">{{ student.number }}</td>
-                                <td class="p-4 text-gray-500">{{ student.id }}</td>
+                                <td class="p-4 text-center text-gray-500">{{ student.id }}</td>
                                 <td class="p-4 font-bold text-gray-800">{{ student.name }}</td>
-                                <td class="p-4 font-bold" :class="getStatusColor(student.todayStatus)">
-                                    <span v-if="student.todayStatus" class="flex items-center gap-1">
+                                <td class="p-4 text-center text-gray-600">ม.{{ student.classLevel }}</td>
+                                <td class="p-4 text-center font-bold text-gray-600">{{ student.number }}</td>
+                                <td class="p-4 text-center font-bold" :class="student.todayTime !== '-' && student.todayTime ? 'text-gray-800' : 'text-gray-400'">
+                                    {{ student.todayTime || '-' }}
+                                </td>
+                                <td class="p-4 text-center font-bold" :class="getStatusColor(student.todayStatus)">
+                                    <span v-if="student.todayStatus" class="flex items-center justify-center gap-1">
                                         <i class="fa-solid fa-circle text-[10px]"></i> {{ student.todayStatus }}
                                     </span>
                                     <span v-else class="text-gray-400 font-normal">ยังไม่เช็คชื่อ</span>
                                 </td>
                                 <td class="p-4">
                                     <div v-if="!student.todayStatus" class="flex gap-2 justify-center">
-                                        <button @click="markStatus(student, 'ลา')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow transition flex-1">ลา</button>
-                                        <button @click="markStatus(student, 'ขาด')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow transition flex-1">ขาด</button>
+                                        <button @click="markStatus(student, 'ลา')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow transition flex-1">ลา</button>
+                                        <button @click="markStatus(student, 'ขาด')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow transition flex-1">ขาด</button>
                                     </div>
                                     <div v-else class="text-center text-sm text-gray-500 italic">บันทึกแล้ว</div>
                                 </td>
                             </tr>
                             <tr v-if="myClassStudents.length === 0">
-                                <td colspan="5" class="p-8 text-center text-gray-500">ไม่พบข้อมูลนักเรียนในชั้นนี้</td>
+                                <td colspan="7" class="p-8 text-center text-gray-500">ไม่พบข้อมูลนักเรียนในห้องนี้</td>
                             </tr>
                         </tbody>
                     </table>
@@ -235,15 +292,20 @@
         <!-- ================= ADMIN DASHBOARD ================= -->
         <div v-if="currentTab === 'adminDashboard'" class="space-y-6 mt-2">
             <!-- Admin Top Navigation -->
-            <div class="flex flex-wrap gap-2 bg-white p-2 rounded-2xl shadow-sm border border-gray-200">
-                <button @click="adminSubTab = 'students'" :class="adminSubTab === 'students' ? 'bg-purple-100 text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'" class="px-5 py-2.5 rounded-xl transition flex-1 sm:flex-none text-center">
-                    <i class="fa-solid fa-users mr-1"></i> จัดการนักเรียน
-                </button>
-                <button @click="adminSubTab = 'scan'" :class="adminSubTab === 'scan' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-100'" class="px-5 py-2.5 rounded-xl transition flex-1 sm:flex-none text-center">
-                    <i class="fa-solid fa-face-viewfinder mr-1"></i> บันทึกใบหน้า
-                </button>
-                <button @click="adminSubTab = 'teachers'" :class="adminSubTab === 'teachers' ? 'bg-orange-100 text-orange-700 font-bold' : 'text-gray-600 hover:bg-gray-100'" class="px-5 py-2.5 rounded-xl transition flex-1 sm:flex-none text-center">
-                    <i class="fa-solid fa-chalkboard-user mr-1"></i> จัดการครูที่ปรึกษา
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-3 rounded-2xl shadow-sm border border-gray-200">
+                <div class="flex flex-wrap gap-2 w-full md:w-auto">
+                    <button @click="adminSubTab = 'students'" :class="adminSubTab === 'students' ? 'bg-purple-100 text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'" class="px-5 py-2.5 rounded-xl transition flex-1 sm:flex-none text-center">
+                        <i class="fa-solid fa-users mr-1"></i> จัดการนักเรียน
+                    </button>
+                    <button @click="adminSubTab = 'scan'" :class="adminSubTab === 'scan' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-100'" class="px-5 py-2.5 rounded-xl transition flex-1 sm:flex-none text-center">
+                        <i class="fa-solid fa-face-viewfinder mr-1"></i> บันทึกใบหน้า
+                    </button>
+                    <button @click="adminSubTab = 'teachers'" :class="adminSubTab === 'teachers' ? 'bg-orange-100 text-orange-700 font-bold' : 'text-gray-600 hover:bg-gray-100'" class="px-5 py-2.5 rounded-xl transition flex-1 sm:flex-none text-center">
+                        <i class="fa-solid fa-chalkboard-user mr-1"></i> จัดการครู
+                    </button>
+                </div>
+                <button @click="loadAdminData" class="bg-gray-800 hover:bg-gray-900 text-white px-5 py-2.5 rounded-xl font-bold transition flex items-center gap-2 shadow w-full md:w-auto justify-center">
+                    <i class="fa-solid fa-rotate-right"></i> รีเฟรชข้อมูลล่าสุด
                 </button>
             </div>
 
@@ -266,58 +328,94 @@
                 </div>
 
                 <div class="overflow-x-auto rounded-xl border border-gray-200">
-                    <table class="w-full text-left border-collapse text-sm">
+                    <table class="w-full text-left border-collapse text-sm whitespace-nowrap">
                         <thead>
                             <tr class="bg-gray-50 border-b">
-                                <th class="p-3 font-bold">รหัส</th>
+                                <th class="p-3 font-bold text-center">รหัสประจำตัว</th>
                                 <th class="p-3 font-bold">ชื่อ - นามสกุล</th>
-                                <th class="p-3 font-bold">ชั้น</th>
-                                <th class="p-3 font-bold">เลขที่</th>
-                                <th class="p-3 font-bold">รหัสผ่าน (ผู้ปกครอง)</th>
+                                <th class="p-3 font-bold text-center">ชั้น</th>
+                                <th class="p-3 font-bold text-center">เลขที่</th>
+                                <th class="p-3 font-bold">ชื่อผู้ใช้ (ผู้ปกครอง)</th>
                                 <th class="p-3 font-bold text-center">จัดการ</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
-                            <tr v-for="s in adminData.students" :key="s.key" class="hover:bg-gray-50">
-                                <td class="p-3">{{ s.id }}</td>
-                                <td class="p-3 font-bold">{{ s.name }}</td>
-                                <td class="p-3 text-center">{{ s.classLevel }}</td>
-                                <td class="p-3 text-center">{{ s.number }}</td>
-                                <td class="p-3 text-gray-500">{{ s.parentPassword }}</td>
+                            <tr v-for="s in adminData.students" :key="s.key" class="hover:bg-gray-50 transition">
+                                <td class="p-3 text-center text-gray-600 font-medium">{{ s.id }}</td>
+                                <td class="p-3 font-bold text-gray-800">{{ s.name }}</td>
+                                <td class="p-3 text-center text-gray-600">{{ s.classLevel }}</td>
+                                <td class="p-3 text-center text-gray-600">{{ s.number }}</td>
+                                <td class="p-3 text-gray-500">{{ s.parentUsername || s.id }}</td>
                                 <td class="p-3">
                                     <div class="flex justify-center gap-2">
-                                        <button @click="editRecord(s, 'student')" class="text-blue-500 hover:bg-blue-100 p-2 rounded"><i class="fa-solid fa-pen"></i></button>
-                                        <button @click="deleteRecord(s.key, 'students')" class="text-red-500 hover:bg-red-100 p-2 rounded"><i class="fa-solid fa-trash"></i></button>
+                                        <button @click="editRecord(s, 'student')" class="text-blue-500 hover:bg-blue-100 p-2 rounded transition"><i class="fa-solid fa-pen"></i></button>
+                                        <button @click="deleteRecord(s.key, 'students')" class="text-red-500 hover:bg-red-100 p-2 rounded transition"><i class="fa-solid fa-trash"></i></button>
                                     </div>
                                 </td>
                             </tr>
-                            <tr v-if="adminData.students.length === 0"><td colspan="6" class="p-8 text-center text-gray-500">ไม่มีข้อมูลนักเรียน</td></tr>
+                            <tr v-if="adminData.students.length === 0"><td colspan="6" class="p-8 text-center text-gray-500">ไม่มีข้อมูลนักเรียน หรือกำลังโหลดข้อมูล</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- Admin: Face Scan Target -->
+            <!-- Admin: Face Scan Target (Table Format) -->
             <div v-if="adminSubTab === 'scan'" class="bg-white p-6 rounded-3xl shadow-lg border-t-8 border-blue-500">
-                <div class="flex justify-between items-center mb-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b pb-4">
                     <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-face-viewfinder"></i> บันทึกใบหน้าเข้าระบบ</h2>
-                    <input v-model="searchQuery" placeholder="ค้นหาชื่อ หรือ รหัส..." class="border p-2 rounded-lg outline-none focus:ring-2 focus:ring-blue-300 w-64">
+                    
+                    <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                        <div class="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border shadow-sm">
+                            <i class="fa-solid fa-filter text-gray-400"></i>
+                            <select v-model="scanFilter.classLevel" class="bg-transparent outline-none font-bold text-gray-700 cursor-pointer">
+                                <option value="">แสดงทุกห้อง</option>
+                                <option v-for="c in uniqueClasses" :key="c" :value="c">ม.{{ c }}</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border focus-within:ring-2 ring-blue-300 w-full md:w-64 shadow-sm transition">
+                            <i class="fa-solid fa-magnifying-glass text-gray-400"></i>
+                            <input v-model="scanFilter.search" placeholder="ค้นหาชื่อ หรือ รหัส..." class="outline-none w-full bg-transparent">
+                        </div>
+                    </div>
                 </div>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div v-for="s in filteredStudents" :key="s.key" class="border rounded-xl p-4 flex justify-between items-center hover:shadow-md transition bg-gray-50">
-                        <div>
-                            <div class="font-bold text-gray-800">{{ s.name }}</div>
-                            <div class="text-sm text-gray-500">รหัส: {{ s.id }} | ม.{{ s.classLevel }}/{{ s.number }}</div>
-                            <div class="mt-2 text-xs font-bold" :class="s.descriptor ? 'text-green-600' : 'text-red-500'">
-                                <i :class="s.descriptor ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"></i> 
-                                {{ s.descriptor ? 'มีข้อมูลใบหน้าแล้ว' : 'ยังไม่บันทึกใบหน้า' }}
-                            </div>
-                        </div>
-                        <button @click="openFaceScanModal(s)" class="h-12 w-12 rounded-full flex items-center justify-center text-white shadow-md transition" :class="s.descriptor ? 'bg-blue-500 hover:bg-blue-600' : 'bg-pink-500 hover:bg-pink-600 animate-pulse'">
-                            <i class="fa-solid fa-camera text-xl"></i>
-                        </button>
-                    </div>
+                <div class="overflow-x-auto rounded-xl border border-gray-200">
+                    <table class="w-full text-left border-collapse text-sm whitespace-nowrap">
+                        <thead>
+                            <tr class="bg-gray-50 border-b">
+                                <th class="p-3 font-bold text-center w-24">เลขประจำตัว</th>
+                                <th class="p-3 font-bold">ชื่อ-นามสกุล</th>
+                                <th class="p-3 font-bold text-center w-20">ชั้น</th>
+                                <th class="p-3 font-bold text-center w-20">เลขที่</th>
+                                <th class="p-3 font-bold text-center w-32">สถานะใบหน้า</th>
+                                <th class="p-3 font-bold text-center w-32">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr v-for="s in scanFilteredStudents" :key="s.key" class="hover:bg-blue-50 transition">
+                                <td class="p-3 text-center text-gray-600 font-medium">{{ s.id }}</td>
+                                <td class="p-3 font-bold text-gray-800">{{ s.name }}</td>
+                                <td class="p-3 text-center text-gray-600">ม.{{ s.classLevel }}</td>
+                                <td class="p-3 text-center text-gray-600">{{ s.number }}</td>
+                                <td class="p-3 text-center">
+                                    <span class="px-2 py-1 rounded-full text-xs font-bold shadow-sm" :class="s.descriptor ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'">
+                                        <i :class="s.descriptor ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"></i> 
+                                        {{ s.descriptor ? 'บันทึกแล้ว' : 'ยังไม่บันทึก' }}
+                                    </span>
+                                </td>
+                                <td class="p-3 text-center">
+                                    <button @click="openFaceScanModal(s)" class="px-4 py-1.5 rounded-lg font-bold text-white shadow-sm transition flex items-center justify-center gap-2 w-full max-w-[120px] mx-auto" :class="s.descriptor ? 'bg-blue-500 hover:bg-blue-600' : 'bg-pink-500 hover:bg-pink-600 animate-pulse'">
+                                        <i class="fa-solid fa-camera"></i> สแกน
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr v-if="scanFilteredStudents.length === 0">
+                                <td colspan="6" class="p-8 text-center text-gray-500">
+                                    <i class="fa-solid fa-search text-3xl mb-2 opacity-50 block"></i> ไม่พบข้อมูลที่ค้นหา
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -340,31 +438,31 @@
                 </div>
 
                 <div class="overflow-x-auto rounded-xl border border-gray-200">
-                    <table class="w-full text-left border-collapse text-sm">
+                    <table class="w-full text-left border-collapse text-sm whitespace-nowrap">
                         <thead>
                             <tr class="bg-gray-50 border-b">
                                 <th class="p-3 font-bold">Username</th>
                                 <th class="p-3 font-bold">รหัสผ่าน</th>
                                 <th class="p-3 font-bold">ชื่อ - นามสกุล</th>
-                                <th class="p-3 font-bold">ที่ปรึกษาชั้น (เช่น 4/1)</th>
+                                <th class="p-3 font-bold text-center">ที่ปรึกษาชั้น (เช่น 4/1)</th>
                                 <th class="p-3 font-bold text-center">จัดการ</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
-                            <tr v-for="t in adminData.teachers" :key="t.key" class="hover:bg-gray-50">
-                                <td class="p-3">{{ t.username }}</td>
+                            <tr v-for="t in adminData.teachers" :key="t.key" class="hover:bg-gray-50 transition">
+                                <td class="p-3 text-gray-600">{{ t.username }}</td>
                                 <td class="p-3 text-gray-500">{{ t.password }}</td>
-                                <td class="p-3 font-bold">{{ t.name }}</td>
-                                <td class="p-3 text-center" v-if="t.role !== 'admin'">ม.{{ t.classLevel }}</td>
-                                <td class="p-3 text-center" v-else>ผู้ดูแลระบบ</td>
+                                <td class="p-3 font-bold text-gray-800">{{ t.name }}</td>
+                                <td class="p-3 text-center text-gray-600" v-if="t.role !== 'admin'">ม.{{ t.classLevel }}</td>
+                                <td class="p-3 text-center text-purple-600 font-bold" v-else>ผู้ดูแลระบบ</td>
                                 <td class="p-3">
                                     <div class="flex justify-center gap-2">
-                                        <button v-if="t.role !== 'admin'" @click="editRecord(t, 'teacher')" class="text-blue-500 hover:bg-blue-100 p-2 rounded"><i class="fa-solid fa-pen"></i></button>
-                                        <button v-if="t.role !== 'admin'" @click="deleteRecord(t.key, 'teachers')" class="text-red-500 hover:bg-red-100 p-2 rounded"><i class="fa-solid fa-trash"></i></button>
+                                        <button v-if="t.role !== 'admin'" @click="editRecord(t, 'teacher')" class="text-blue-500 hover:bg-blue-100 p-2 rounded transition"><i class="fa-solid fa-pen"></i></button>
+                                        <button v-if="t.role !== 'admin'" @click="deleteRecord(t.key, 'teachers')" class="text-red-500 hover:bg-red-100 p-2 rounded transition"><i class="fa-solid fa-trash"></i></button>
                                     </div>
                                 </td>
                             </tr>
-                            <tr v-if="adminData.teachers.length === 0"><td colspan="5" class="p-8 text-center text-gray-500">ไม่มีข้อมูลครู</td></tr>
+                            <tr v-if="adminData.teachers.length === 0"><td colspan="5" class="p-8 text-center text-gray-500">ไม่มีข้อมูลครู หรือกำลังโหลดข้อมูล</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -372,7 +470,7 @@
         </div>
 
         <!-- ================= MODALS ================= -->
-        <!-- Add/Edit Modal -->
+        <!-- Add/Edit Modal (Admin) -->
         <transition name="modal">
             <div v-if="showFormModal" class="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4">
                 <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
@@ -381,7 +479,7 @@
                     </div>
                     <div class="p-6 space-y-4">
                         <template v-if="formType === 'student'">
-                            <input v-model="formData.id" placeholder="รหัสประจำตัว" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
+                            <input v-model="formData.id" placeholder="รหัสประจำตัว (ใช้เป็น Username ด้วย)" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
                             <input v-model="formData.name" placeholder="ชื่อ - นามสกุล" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
                             <div class="flex gap-3">
                                 <input v-model="formData.classLevel" placeholder="ชั้น (เช่น 4/1)" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
@@ -396,7 +494,7 @@
                             <input v-model="formData.classLevel" placeholder="ที่ปรึกษาชั้น (เช่น 4/1)" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
                         </template>
                         <div class="flex gap-3 mt-6">
-                            <button @click="saveRecord" class="flex-1 text-white py-3 rounded-xl font-bold shadow" :class="formType === 'student' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-orange-600 hover:bg-orange-700'">บันทึก</button>
+                            <button @click="saveRecord" class="flex-1 text-white py-3 rounded-xl font-bold shadow transition" :class="formType === 'student' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-orange-600 hover:bg-orange-700'">บันทึก</button>
                             <button @click="showFormModal = false" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 rounded-xl font-bold transition">ยกเลิก</button>
                         </div>
                     </div>
@@ -404,9 +502,41 @@
             </div>
         </transition>
 
-        <!-- Face Scan Target Modal -->
+        <!-- Parent Settings Modal -->
         <transition name="modal">
-            <div v-if="showFaceModal" class="fixed inset-0 bg-black/80 z-50 flex flex-col justify-center items-center p-4">
+            <div v-if="showParentSettings" class="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4">
+                <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+                    <div class="p-4 bg-gray-800 text-white font-bold text-lg flex justify-between items-center">
+                        <span><i class="fa-solid fa-gear"></i> ตั้งค่าระบบผู้ปกครอง</span>
+                        <button @click="showParentSettings = false" class="hover:text-gray-300"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="p-6 space-y-5">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">Telegram Chat ID</label>
+                            <input v-model="parentSettingsForm.telegramChatId" placeholder="เลข Chat ID สำหรับแจ้งเตือน" class="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-blue-400">
+                            <p class="text-xs text-gray-500 mt-1">รับการแจ้งเตือนทันทีเมื่อนักเรียนสแกนหน้าสำเร็จ</p>
+                        </div>
+                        <hr class="border-gray-100">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">ชื่อผู้ใช้ (เข้าสู่ระบบ)</label>
+                            <input v-model="parentSettingsForm.parentUsername" placeholder="ค่าเริ่มต้นคือ รหัสประจำตัวนักเรียน" class="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-gray-400">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">รหัสผ่านใหม่</label>
+                            <input v-model="parentSettingsForm.parentPassword" placeholder="รหัสผ่านสำหรับล็อกอิน" class="w-full border-2 border-gray-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-gray-400">
+                        </div>
+                        
+                        <div class="pt-2">
+                            <button @click="saveParentSettings" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold shadow transition">บันทึกการตั้งค่า</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <!-- Face Scan Target Modal (Admin) -->
+        <transition name="modal">
+            <div v-if="showFaceModal" class="fixed inset-0 bg-black/90 z-50 flex flex-col justify-center items-center p-4">
                 <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
                     <div class="p-4 bg-blue-600 text-white font-bold flex justify-between items-center">
                         <span>บันทึกใบหน้า: {{ selectedStudent?.name }}</span>
@@ -436,7 +566,7 @@ const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw4tSjxsbNFDWB8Pzxt
 
 // ================= IMPORTS =================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getDatabase, ref, push, get, update, remove, query, orderByChild, equalTo, serverTimestamp, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { getDatabase, ref, push, get, update, remove, query, orderByChild, equalTo, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyCcbcchbHCjKwCw0xnNkqE42d7ZvK0g3Fk",
@@ -453,7 +583,6 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const { createApp } = Vue;
 
-// สร้างแอปพลิเคชัน Vue และเก็บลงตัวแปร myApp
 const myApp = createApp({
     data() {
         return {
@@ -470,7 +599,9 @@ const myApp = createApp({
             cooldowns: {},
 
             // Parent Data
-            telegramChatId: '',
+            parentData: { history: [], stats: { normal: 0, late: 0, absent: 0, leave: 0 } },
+            showParentSettings: false,
+            parentSettingsForm: { parentUsername: '', parentPassword: '', telegramChatId: '' },
 
             // Teacher Data
             myClassStudents: [],
@@ -478,11 +609,11 @@ const myApp = createApp({
             // Admin Data
             adminSubTab: 'students',
             adminData: { students: [], teachers: [] },
-            searchQuery: '',
+            scanFilter: { search: '', classLevel: '' },
             
             // Modal States
             showFormModal: false,
-            formType: 'student', // 'student' or 'teacher'
+            formType: 'student', 
             isEditing: false,
             formData: {},
             
@@ -491,10 +622,21 @@ const myApp = createApp({
         }
     },
     computed: {
-        filteredStudents() {
-            if (!this.searchQuery) return this.adminData.students;
-            const q = this.searchQuery.toLowerCase();
-            return this.adminData.students.filter(s => s.name.toLowerCase().includes(q) || s.id.includes(q));
+        uniqueClasses() {
+            // ป้องกันการค้างจาก Data type แบบ Number โดยบังคับใส่ String()
+            const classes = this.adminData.students.map(s => String(s.classLevel || '')).filter(c => c);
+            return [...new Set(classes)].sort((a,b) => a.localeCompare(b, 'th', {numeric: true}));
+        },
+        scanFilteredStudents() {
+            let result = this.adminData.students;
+            if (this.scanFilter.classLevel) {
+                result = result.filter(s => String(s.classLevel || '') === String(this.scanFilter.classLevel));
+            }
+            if (this.scanFilter.search) {
+                const q = String(this.scanFilter.search).toLowerCase();
+                result = result.filter(s => String(s.name || '').toLowerCase().includes(q) || String(s.id || '').includes(q));
+            }
+            return result;
         }
     },
     async mounted() {
@@ -505,6 +647,8 @@ const myApp = createApp({
             this.stopVideo();
             if (newTab === 'scan') this.startScanSystem('videoInput');
             if (newTab === 'adminDashboard') this.loadAdminData();
+            if (newTab === 'teacherDashboard') this.loadTeacherClass();
+            if (newTab === 'parentDashboard') this.loadParentData();
         }
     },
     methods: {
@@ -524,6 +668,11 @@ const myApp = createApp({
             this.loginData = { username: '', password: '' };
         },
         logout() { this.goToMenu(); },
+        formatDate(dateStr) {
+            if(!dateStr) return "-";
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
+        },
 
         // ================= AI & SCANNER LOGIC =================
         async startScanSystem(videoId, isRegistration = false) {
@@ -610,12 +759,9 @@ const myApp = createApp({
                 this.recentScans.unshift({ id: Date.now(), name: studentData.name, time: timeStr, status });
                 if(this.recentScans.length > 10) this.recentScans.pop();
 
-                // Telegram Notification - แก้ไข Headers ให้ส่งแบบ text/plain ป้องกัน CORS
                 if(studentData.telegramChatId) {
                     fetch(GAS_API_URL, {
-                        method: 'POST',
-                        redirect: 'follow',
-                        headers: { "Content-Type": "text/plain;charset=utf-8" },
+                        method: 'POST', redirect: 'follow', headers: { "Content-Type": "text/plain;charset=utf-8" },
                         body: JSON.stringify({
                             action: "telegram", chatId: studentData.telegramChatId,
                             message: `🔔 <b>แจ้งเตือนการเข้าเรียน</b>\nนร.: ${studentData.name}\nเวลา: ${timeStr} น.\nสถานะ: ${status}`
@@ -631,20 +777,20 @@ const myApp = createApp({
             Swal.fire({ title: 'ตรวจสอบ...', didOpen: () => Swal.showLoading() });
             try {
                 if (type === 'parent') {
-                    const q = query(ref(db, 'students'), orderByChild('id'), equalTo(this.loginData.username));
-                    const snap = await get(q);
+                    const snap = await get(ref(db, 'students'));
+                    let found = false;
                     if (snap.exists()) {
-                        let found = false;
                         snap.forEach(child => {
-                            if(child.val().parentPassword === this.loginData.password) {
-                                this.currentUser = { role: 'ผู้ปกครอง', docId: child.key, name: child.val().name, studentData: child.val() };
-                                this.telegramChatId = child.val().telegramChatId || '';
+                            const data = child.val();
+                            const matchUser = (String(data.id) === String(this.loginData.username) || String(data.parentUsername) === String(this.loginData.username));
+                            if(matchUser && String(data.parentPassword) === String(this.loginData.password)) {
+                                this.currentUser = { role: 'ผู้ปกครอง', docId: child.key, name: data.name, studentData: data };
                                 this.currentTab = 'parentDashboard';
                                 found = true;
                             }
                         });
-                        if(found) Swal.close(); else throw new Error('รหัสผ่านไม่ถูกต้อง');
-                    } else throw new Error('ไม่พบรหัสนักเรียน');
+                    }
+                    if(found) Swal.close(); else throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
                 } 
                 else if (type === 'teacher' || type === 'admin') {
                     const q = query(ref(db, 'teachers'), orderByChild('username'), equalTo(this.loginData.username));
@@ -653,13 +799,12 @@ const myApp = createApp({
                         let found = false;
                         snap.forEach(child => {
                             const data = child.val();
-                            if(data.password === this.loginData.password) {
+                            if(String(data.password) === String(this.loginData.password)) {
                                 if(type === 'admin' && data.role !== 'admin') throw new Error('ไม่มีสิทธิ์เข้าถึงระบบผู้ดูแล');
                                 if(type === 'teacher' && data.role === 'admin') throw new Error('กรุณาเข้าสู่ระบบผ่านเมนูผู้ดูแลระบบ');
                                 
                                 this.currentUser = { role: data.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ครูที่ปรึกษา', name: data.name, classLevel: data.classLevel };
                                 this.currentTab = type === 'admin' ? 'adminDashboard' : 'teacherDashboard';
-                                if(type === 'teacher') this.loadTeacherClass();
                                 found = true;
                             }
                         });
@@ -670,34 +815,94 @@ const myApp = createApp({
         },
 
         // ================= PARENT LOGIC =================
-        async updateTelegram() {
-            if(!this.telegramChatId) return;
-            await update(ref(db, 'students/' + this.currentUser.docId), { telegramChatId: this.telegramChatId });
-            Swal.fire('สำเร็จ', 'บันทึกการตั้งค่า Telegram แล้ว', 'success');
+        async loadParentData() {
+            Swal.fire({ title: 'กำลังโหลด...', didOpen: () => Swal.showLoading() });
+            try {
+                const sId = this.currentUser.studentData.id;
+                const snap = await get(query(ref(db, 'attendance'), orderByChild('studentId'), equalTo(sId)));
+                
+                let historyObj = {};
+                let stats = { normal: 0, late: 0, absent: 0, leave: 0 };
+                
+                if (snap.exists()) {
+                    snap.forEach(child => {
+                        const rec = { key: child.key, ...child.val() };
+                        if (!historyObj[rec.date] || rec.time < historyObj[rec.date].time) {
+                            historyObj[rec.date] = rec;
+                        }
+                    });
+                }
+                
+                const historyArr = Object.values(historyObj).sort((a,b) => new Date(b.date) - new Date(a.date));
+                historyArr.forEach(rec => {
+                    if(rec.status === 'มาปกติ') stats.normal++;
+                    else if(rec.status === 'มาสาย') stats.late++;
+                    else if(rec.status === 'ลา') stats.leave++;
+                    else if(rec.status === 'ขาด') stats.absent++;
+                });
+
+                this.parentData.history = historyArr;
+                this.parentData.stats = stats;
+                Swal.close();
+            } catch(e) { Swal.fire('Error', e.message, 'error'); }
+        },
+        openParentSettings() {
+            this.parentSettingsForm = {
+                parentUsername: this.currentUser.studentData.parentUsername || this.currentUser.studentData.id,
+                parentPassword: this.currentUser.studentData.parentPassword || '',
+                telegramChatId: this.currentUser.studentData.telegramChatId || ''
+            };
+            this.showParentSettings = true;
+        },
+        async saveParentSettings() {
+            if(!this.parentSettingsForm.parentPassword) return Swal.fire('เตือน', 'กรุณากำหนดรหัสผ่าน', 'warning');
+            try {
+                await update(ref(db, 'students/' + this.currentUser.docId), { 
+                    parentUsername: this.parentSettingsForm.parentUsername,
+                    parentPassword: this.parentSettingsForm.parentPassword,
+                    telegramChatId: this.parentSettingsForm.telegramChatId 
+                });
+                
+                this.currentUser.studentData.parentUsername = this.parentSettingsForm.parentUsername;
+                this.currentUser.studentData.parentPassword = this.parentSettingsForm.parentPassword;
+                this.currentUser.studentData.telegramChatId = this.parentSettingsForm.telegramChatId;
+                
+                this.showParentSettings = false;
+                Swal.fire('สำเร็จ', 'บันทึกการตั้งค่าเรียบร้อยแล้ว', 'success');
+            } catch(e) { Swal.fire('Error', e.message, 'error'); }
         },
 
         // ================= TEACHER LOGIC =================
         async loadTeacherClass() {
-            const snap = await get(ref(db, 'students'));
-            if(!snap.exists()) { this.myClassStudents = []; return; }
-            let students = [];
-            const todayStr = new Date().toISOString().split('T')[0];
+            Swal.fire({ title: 'กำลังโหลดรายชื่อ...', didOpen: () => Swal.showLoading() });
+            try {
+                const snap = await get(ref(db, 'students'));
+                if(!snap.exists()) { this.myClassStudents = []; Swal.close(); return; }
+                
+                let students = [];
+                const todayStr = new Date().toISOString().split('T')[0];
 
-            snap.forEach(child => {
-                if(child.val().classLevel === this.currentUser.classLevel) students.push(child.val());
-            });
+                snap.forEach(child => {
+                    if(String(child.val().classLevel) === String(this.currentUser.classLevel)) students.push(child.val());
+                });
 
-            const attSnap = await get(ref(db, 'attendance'));
-            if (attSnap.exists()) {
+                const attSnap = await get(ref(db, 'attendance'));
                 const attData = [];
-                attSnap.forEach(c => { if(c.val().date === todayStr) attData.push(c.val()); });
+                if (attSnap.exists()) {
+                    attSnap.forEach(c => { if(c.val().date === todayStr) attData.push(c.val()); });
+                }
+
                 students = students.map(s => {
-                    const record = attData.find(a => a.studentId === s.id);
+                    const record = attData.find(a => String(a.studentId) === String(s.id));
                     s.todayStatus = record ? record.status : null;
+                    s.todayTime = record ? record.time : '-';
                     return s;
                 });
-            }
-            this.myClassStudents = students.sort((a,b) => parseInt(a.number || '0') - parseInt(b.number || '0'));
+                
+                // ป้องกันปัญหาการเรียงลำดับค้าง
+                this.myClassStudents = students.sort((a,b) => parseInt(a.number || '0', 10) - parseInt(b.number || '0', 10));
+                Swal.close();
+            } catch(e) { Swal.fire('Error', e.message, 'error'); }
         },
         async markStatus(student, status) {
             const todayStr = new Date().toISOString().split('T')[0];
@@ -706,6 +911,7 @@ const myApp = createApp({
                 date: todayStr, time: "-", status: status, timestamp: serverTimestamp()
             });
             student.todayStatus = status;
+            student.todayTime = '-';
             Swal.fire({ toast:true, position:'top-end', icon:'success', title: `บันทึก ${status} สำเร็จ`, showConfirmButton:false, timer:1500 });
         },
         getStatusColor(status) {
@@ -718,18 +924,26 @@ const myApp = createApp({
 
         // ================= ADMIN LOGIC (CRUD & EXCEL) =================
         async loadAdminData() {
-            // Load Students
-            onValue(ref(db, 'students'), (snap) => {
-                const arr = [];
-                if(snap.exists()) snap.forEach(c => arr.push({ key: c.key, ...c.val() }));
-                this.adminData.students = arr.sort((a,b) => (a.classLevel || '').localeCompare(b.classLevel || '') || parseInt(a.number || '0') - parseInt(b.number || '0'));
-            });
-            // Load Teachers
-            onValue(ref(db, 'teachers'), (snap) => {
-                const arr = [];
-                if(snap.exists()) snap.forEach(c => arr.push({ key: c.key, ...c.val() }));
-                this.adminData.teachers = arr;
-            });
+            Swal.fire({ title: 'กำลังโหลดฐานข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                const sSnap = await get(ref(db, 'students'));
+                const tSnap = await get(ref(db, 'teachers'));
+                const sArr = [];
+                const tArr = [];
+                
+                if(sSnap.exists()) sSnap.forEach(c => sArr.push({ key: c.key, ...c.val() }));
+                if(tSnap.exists()) tSnap.forEach(c => tArr.push({ key: c.key, ...c.val() }));
+
+                // ใส่ String() ห่อตัวแปรเพื่อป้องกันจอค้างจากข้อมูลที่เป็น Number (Bug fix)
+                this.adminData.students = sArr.sort((a,b) => {
+                    const cA = String(a.classLevel || '');
+                    const cB = String(b.classLevel || '');
+                    return cA.localeCompare(cB, 'th', {numeric: true}) || (parseInt(a.number || '0', 10) - parseInt(b.number || '0', 10));
+                });
+                this.adminData.teachers = tArr;
+                
+                Swal.close();
+            } catch(e) { Swal.fire('Error', e.message, 'error'); }
         },
         openModal(type) {
             this.formType = type;
@@ -746,6 +960,16 @@ const myApp = createApp({
         async saveRecord() {
             const path = this.formType === 'student' ? 'students' : 'teachers';
             try {
+                // บังคับแปลงเป็น String ก่อนเซฟลง Database เพื่อป้องกันปัญหาในอนาคต
+                if(this.formType === 'student'){
+                    this.formData.id = String(this.formData.id);
+                    this.formData.classLevel = String(this.formData.classLevel);
+                    this.formData.number = String(this.formData.number);
+                } else {
+                    this.formData.username = String(this.formData.username);
+                    this.formData.classLevel = String(this.formData.classLevel);
+                }
+
                 if(this.isEditing) {
                     const key = this.formData.key;
                     delete this.formData.key;
@@ -755,19 +979,21 @@ const myApp = createApp({
                 }
                 this.showFormModal = false;
                 Swal.fire({ toast:true, position:'top-end', icon:'success', title: 'บันทึกข้อมูลเรียบร้อย', showConfirmButton:false, timer:1500 });
+                this.loadAdminData(); 
             } catch(e) { Swal.fire('Error', e.message, 'error'); }
         },
         async deleteRecord(key, path) {
             if(await Swal.fire({ title: 'ยืนยันการลบ?', icon: 'warning', showCancelButton: true }).then(r => !r.isConfirmed)) return;
             await remove(ref(db, `${path}/${key}`));
             Swal.fire({ toast:true, position:'top-end', icon:'success', title: 'ลบข้อมูลสำเร็จ', showConfirmButton:false, timer:1500 });
+            this.loadAdminData(); 
         },
 
         // EXCEL EXPORT
         downloadTemplate(type) {
             let data, filename;
             if(type === 'student') {
-                data = [{"รหัส": "10001", "ชื่อ-นามสกุล": "เด็กชาย เรียนดี", "ชั้น": "1/1", "เลขที่": "1"}];
+                data = [{"รหัสประจำตัว": "10001", "ชื่อ-นามสกุล": "เด็กชาย เรียนดี", "ชั้น": "1/1", "เลขที่": "1"}];
                 filename = "แบบฟอร์มนำเข้านักเรียน.xlsx";
             } else {
                 data = [{"Username": "t01", "Password": "password", "ชื่อ-นามสกุล": "ครูใจดี มากมาย", "ชั้นที่ปรึกษา": "1/1"}];
@@ -778,7 +1004,7 @@ const myApp = createApp({
             XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
             XLSX.writeFile(wb, filename);
         },
-        // EXCEL IMPORT
+        // EXCEL IMPORT - อัปเกรดระบบนำเข้าให้อ่านคอลัมน์ฉลาดขึ้น และบันทึกทีเดียวเร็ว 10 เท่า
         importExcel(event, type) {
             const file = event.target.files[0];
             if(!file) return;
@@ -787,25 +1013,60 @@ const myApp = createApp({
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, {type: 'array'});
-                    const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
                     
-                    Swal.fire({ title: 'กำลังนำเข้าข้อมูล...', didOpen: () => Swal.showLoading() });
+                    Swal.fire({ title: 'กำลังนำเข้าข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
                     const path = type === 'student' ? 'students' : 'teachers';
                     
+                    const updates = {};
+                    let count = 0;
+
                     for(const row of jsonData) {
-                        if(type === 'student' && row['รหัส']) {
-                            await push(ref(db, path), {
-                                id: String(row['รหัส']), name: row['ชื่อ-นามสกุล'], classLevel: String(row['ชั้น']), number: String(row['เลขที่']), parentPassword: "1234", telegramChatId: ""
-                            });
-                        } else if(type === 'teacher' && row['Username']) {
-                            await push(ref(db, path), {
-                                username: String(row['Username']), password: String(row['Password']), name: row['ชื่อ-นามสกุล'], classLevel: String(row['ชั้นที่ปรึกษา']), role: "teacher"
-                            });
+                        const keys = Object.keys(row);
+                        const getVal = (keywords) => {
+                            const k = keys.find(key => keywords.some(kw => String(key).toLowerCase().includes(kw)));
+                            return k ? String(row[k]).trim() : '';
+                        };
+
+                        if(type === 'student') {
+                            const id = getVal(['รหัส', 'id', 'ประจำตัว']);
+                            const name = getVal(['ชื่อ', 'name']);
+                            const classLevel = getVal(['ชั้น', 'room', 'class']);
+                            const number = getVal(['เลขที่', 'no', 'number']);
+
+                            if(id && name) {
+                                const newRef = push(ref(db, path));
+                                updates[newRef.key] = {
+                                    id: id, name: name, classLevel: classLevel, number: number,
+                                    parentPassword: "1234", telegramChatId: "", parentUsername: id
+                                };
+                                count++;
+                            }
+                        } else if(type === 'teacher') {
+                            const user = getVal(['user', 'ผู้ใช้', 'username']);
+                            const pass = getVal(['pass', 'รหัส']);
+                            const name = getVal(['ชื่อ', 'name']);
+                            const classLevel = getVal(['ชั้น', 'ที่ปรึกษา', 'room']);
+
+                            if(user && name) {
+                                const newRef = push(ref(db, path));
+                                updates[newRef.key] = {
+                                    username: user, password: pass || '1234', name: name, classLevel: classLevel, role: "teacher"
+                                };
+                                count++;
+                            }
                         }
                     }
-                    Swal.fire('สำเร็จ', `นำเข้าข้อมูล ${jsonData.length} รายการเรียบร้อย`, 'success');
-                } catch(err) { Swal.fire('ผิดพลาด', 'รูปแบบไฟล์ไม่ถูกต้อง', 'error'); }
-                event.target.value = null; // reset input
+
+                    if(count > 0) {
+                        await update(ref(db, path), updates);
+                        Swal.fire('สำเร็จ', `นำเข้าข้อมูล ${count} รายการเรียบร้อย`, 'success');
+                        this.loadAdminData(); // โหลดข้อมูลมาแสดงทันที
+                    } else {
+                        Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลที่ตรงกับแบบฟอร์ม โปรดตรวจสอบหัวคอลัมน์ Excel อีกครั้ง', 'warning');
+                    }
+                } catch(err) { Swal.fire('ผิดพลาด', 'รูปแบบไฟล์ไม่ถูกต้อง: ' + err.message, 'error'); }
+                event.target.value = null; // รีเซ็ต input ไฟล์
             };
             reader.readAsArrayBuffer(file);
         },
@@ -836,11 +1097,8 @@ const myApp = createApp({
                 const imageBase64 = canvas.toDataURL('image/jpeg', 0.6);
                 const descriptorJson = JSON.stringify(Array.from(detections.descriptor));
 
-                // แก้ไข Headers ให้ส่งแบบ text/plain ป้องกัน CORS error
                 const response = await fetch(GAS_API_URL, {
-                    method: 'POST',
-                    redirect: 'follow',
-                    headers: { "Content-Type": "text/plain;charset=utf-8" },
+                    method: 'POST', redirect: 'follow', headers: { "Content-Type": "text/plain;charset=utf-8" },
                     body: JSON.stringify({ action: 'uploadImage', base64: imageBase64, fileName: this.selectedStudent.id + "_" + this.selectedStudent.name })
                 });
                 const res = await response.json();
@@ -849,16 +1107,16 @@ const myApp = createApp({
                 Swal.fire({ title: '3/3: กำลังอัปเดตฐานข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
                 await update(ref(db, `students/${this.selectedStudent.key}`), { descriptor: descriptorJson, imageUrl: res.url });
                 
+                this.selectedStudent.descriptor = descriptorJson;
+                
                 Swal.fire('สำเร็จ', 'บันทึกข้อมูลใบหน้าเรียบร้อย', 'success');
                 this.closeFaceScanModal();
             } catch(e) { Swal.fire('เกิดข้อผิดพลาด', e.message, 'error'); }
         }
     }
-}); // <-- จุดที่แก้ไขปัญหาให้ถูกต้อง
+});
 
-// คำสั่ง Mount ที่ทำให้โปรแกรมทำงานได้สมบูรณ์
 myApp.mount('#app');
-
 </script>
 </body>
 </html>
