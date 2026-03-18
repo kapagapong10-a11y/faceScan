@@ -27,8 +27,8 @@
         
         .camera-container { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 1rem; background: #000; min-height: 400px; }
         video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-        /* นำ transform: scaleX(-1) ออกจาก canvas เพื่อไม่ให้ตัวหนังสือกลับด้านเวลาวาดชื่อ */
-        canvas.overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        /* นำ transform: scaleX(-1) ออกจาก canvas เพื่อไม่ให้ตัวหนังสือกลับด้านเวลาวาดชื่อ พร้อมบังคับให้อยู่เลเยอร์บนสุด */
+        canvas.overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         
         .modal-enter-active, .modal-leave-active { transition: opacity 0.3s ease; }
         .modal-enter-from, .modal-leave-to { opacity: 0; }
@@ -774,6 +774,7 @@ const myApp = createApp({
             } catch(e) { Swal.fire('ข้อผิดพลาด', 'โหลด AI ไม่สำเร็จ โปรดตรวจสอบอินเทอร์เน็ต', 'error'); }
             this.isAiLoading = false;
         },
+        
         async startVideo(videoId, isRegistration = false) {
             const video = document.getElementById(videoId);
             if(!video) return;
@@ -783,15 +784,20 @@ const myApp = createApp({
 
                 if(!isRegistration) {
                     this.isScanning = true;
-                    video.addEventListener('play', () => {
-                        const canvas = document.getElementById('overlay');
+                    
+                    // กระบวนการสแกนใบหน้าและวาดกรอบ
+                    const processVideo = async () => {
+                        if (!this.isScanning || this.currentTab !== 'scan') return;
                         
-                        const processVideo = async () => {
-                            if (!this.isScanning || this.currentTab !== 'scan') return;
-                            
+                        try {
                             if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                                const canvas = document.getElementById('overlay');
                                 const displaySize = { width: video.clientWidth, height: video.clientHeight };
-                                faceapi.matchDimensions(canvas, displaySize);
+                                
+                                // เช็คและอัปเดตขนาด canvas ถ้าจอภาพหรือกล้องเปลี่ยนขนาด
+                                if (canvas.width !== displaySize.width || canvas.height !== displaySize.height) {
+                                    faceapi.matchDimensions(canvas, displaySize);
+                                }
                                 
                                 const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 });
                                 const detections = await faceapi.detectAllFaces(video, options).withFaceLandmarks().withFaceDescriptors();
@@ -800,62 +806,80 @@ const myApp = createApp({
                                 const ctx = canvas.getContext('2d');
                                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                                if (resizedDetections.length > 0 && this.faceMatcher) {
+                                if (resizedDetections.length > 0) {
                                     resizedDetections.forEach(det => {
-                                        const bestMatch = this.faceMatcher.findBestMatch(det.descriptor);
                                         const box = det.detection.box;
-                                        
-                                        const isKnown = bestMatch.label !== 'unknown';
-                                        const hasScanned = this.scannedToday.has(bestMatch.label);
-                                        
                                         let text = 'ไม่รู้จัก';
                                         let color = '#ef4444'; // แดง
+                                        let isKnown = false;
+                                        let matchLabel = 'unknown';
+
+                                        // ประมวลผลหาใบหน้าที่ตรงกัน (ถ้ามีฐานข้อมูล)
+                                        if (this.faceMatcher) {
+                                            const bestMatch = this.faceMatcher.findBestMatch(det.descriptor);
+                                            matchLabel = bestMatch.label;
+                                            isKnown = matchLabel !== 'unknown';
+                                        }
+
+                                        const hasScanned = this.scannedToday.has(matchLabel);
 
                                         if (isKnown) {
                                             if (hasScanned) {
                                                 // ถ้าสแกนไปแล้วให้ขึ้นสีฟ้า และไม่ต้องนับเฟรมซ้ำ
-                                                text = (this.studentMap[bestMatch.label] || bestMatch.label) + ' (เช็คแล้ว)';
-                                                color = '#3b82f6'; 
+                                                text = (this.studentMap[matchLabel] || matchLabel) + ' (เช็คแล้ว)';
+                                                color = '#3b82f6'; // ฟ้า
                                             } else {
                                                 // *** ระบบยืนยันตัวตน 3 เฟรม (ลดความผิดพลาด 99.9%) ***
-                                                this.matchCounters[bestMatch.label] = (this.matchCounters[bestMatch.label] || 0) + 1;
+                                                this.matchCounters[matchLabel] = (this.matchCounters[matchLabel] || 0) + 1;
                                                 
-                                                if (this.matchCounters[bestMatch.label] >= 3) {
-                                                    text = this.studentMap[bestMatch.label] || bestMatch.label;
+                                                if (this.matchCounters[matchLabel] >= 3) {
+                                                    text = this.studentMap[matchLabel] || matchLabel;
                                                     color = '#22c55e'; // เขียว = ผ่านเกณฑ์ ยืนยันสำเร็จ
-                                                    this.scannedToday.add(bestMatch.label); // ล็อกสิทธิ์ทันที
-                                                    this.processAttendance(bestMatch.label);
+                                                    this.scannedToday.add(matchLabel); // ล็อกสิทธิ์ทันที
+                                                    this.processAttendance(matchLabel);
                                                 } else {
-                                                    text = 'กำลังยืนยัน... ' + Math.floor((this.matchCounters[bestMatch.label]/3)*100) + '%';
+                                                    text = 'กำลังยืนยัน... ' + Math.floor((this.matchCounters[matchLabel]/3)*100) + '%';
                                                     color = '#eab308'; // เหลือง = เห็นหน้าแล้ว แต่ขอยืนยันอีก 1-2 เฟรมเพื่อความชัวร์
                                                 }
                                             }
                                         }
 
+                                        // คำนวณพิกัด X แบบ Mirror เพื่อให้กรอบตรงกับหน้าคนบนจอภาพ
                                         const mirrorX = canvas.width - box.x - box.width;
 
+                                        // 1. วาดกรอบใบหน้า (เส้นหนาขึ้นให้เห็นชัดเจน)
                                         ctx.strokeStyle = color;
-                                        ctx.lineWidth = 3;
+                                        ctx.lineWidth = 4;
                                         ctx.strokeRect(mirrorX, box.y, box.width, box.height);
 
+                                        // 2. วาดพื้นหลังป้ายชื่อ
                                         ctx.fillStyle = color;
                                         ctx.font = 'bold 16px Sarabun';
                                         const textWidth = ctx.measureText(text).width;
                                         ctx.fillRect(mirrorX, box.y - 30, textWidth + 16, 30);
 
+                                        // 3. เขียนข้อความ
                                         ctx.fillStyle = '#ffffff';
                                         ctx.fillText(text, mirrorX + 8, box.y - 10);
                                     });
                                 }
                             }
-                            if (this.isScanning) requestAnimationFrame(processVideo);
-                        };
+                        } catch (err) {
+                            console.error("Video processing error:", err);
+                        }
                         
-                        processVideo();
-                    });
+                        // วนลูปการทำงานต่อไปเรื่อยๆ
+                        if (this.isScanning) {
+                            requestAnimationFrame(processVideo);
+                        }
+                    };
+                    
+                    // เริ่มคำสั่ง processVideo ทันทีไม่ต้องรอ Event listener (แก้บั๊กเบราว์เซอร์ไม่ยิง Event)
+                    processVideo();
                 }
             } catch(err) { Swal.fire('ถูกบล็อกสิทธิ์', 'กรุณาอนุญาตการเข้าถึงกล้องถ่ายรูป', 'error'); }
         },
+        
         stopVideo() {
             this.isScanning = false; 
             if(this.videoStream) { this.videoStream.getTracks().forEach(t => t.stop()); this.videoStream = null; }
