@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart Face Attendance</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { font-family: 'Sarabun', sans-serif; background-color: #f0f2f5; }
+    .list-move, .list-enter-active, .list-leave-active { transition: all 0.5s ease; }
+    .list-enter-from { opacity: 0; transform: translateY(30px); }
+    .list-leave-to { opacity: 0; transform: translateX(-30px); }
+    .camera-container { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 1rem; background: #000; min-height: 400px; }
+    video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    canvas.overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+  </style>
+</head>
+<body>
+  <div id="app" class="min-h-screen flex flex-col">
+    <nav class="bg-indigo-700 text-white shadow-md p-4 flex justify-between items-center">
+      <div class="font-bold text-xl cursor-pointer flex items-center gap-2" @click="goToMenu">
+        <i class="fa-solid fa-school text-2xl"></i> ระบบเช็คชื่อ วังน้ำเย็นวิทยาคม
+      </div>
+      <div v-if="currentUser" class="flex gap-4 items-center">
+        <span class="text-sm bg-indigo-800 px-3 py-1 rounded-full"><i class="fa-solid fa-user"></i> {{ currentUser.name }}</span>
+        <button @click="logout" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm font-bold shadow transition">ออกจากระบบ</button>
+      </div>
+    </nav>
+
+    <div class="flex-grow p-4 md:p-6 max-w-7xl mx-auto w-full">
+      <div v-if="currentTab === 'menu' && !currentUser" class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
+        <div @click="currentTab = 'scan'" class="bg-white p-8 rounded-2xl shadow-lg text-center cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition border-t-4 border-blue-500">
+          <i class="fa-solid fa-camera text-6xl text-blue-500 mb-4"></i>
+          <h2 class="text-2xl font-bold text-gray-800">จุดสแกนหน้า</h2>
+          <p class="text-gray-500 text-sm mt-2">สำหรับตั้งกล้องเช็คชื่อนักเรียน</p>
+        </div>
+        <div @click="currentTab = 'parentLogin'" class="bg-white p-8 rounded-2xl shadow-lg text-center cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition border-t-4 border-green-500">
+          <i class="fa-solid fa-users text-6xl text-green-500 mb-4"></i>
+          <h2 class="text-2xl font-bold text-gray-800">ระบบผู้ปกครอง</h2>
+          <p class="text-gray-500 text-sm mt-2">ดูสถิติและตั้งค่า Telegram</p>
+        </div>
+        <div @click="currentTab = 'teacherLogin'" class="bg-white p-8 rounded-2xl shadow-lg text-center cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition border-t-4 border-orange-500">
+          <i class="fa-solid fa-chalkboard-user text-6xl text-orange-500 mb-4"></i>
+          <h2 class="text-2xl font-bold text-gray-800">ครูที่ปรึกษา / แอดมิน</h2>
+          <p class="text-gray-500 text-sm mt-2">จัดการข้อมูลและสถานะการเรียน</p>
+        </div>
+      </div>
+
+      <div v-if="currentTab === 'scan'" class="h-[80vh] flex flex-col">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-expand text-blue-500"></i> จุดสแกนเช็คชื่อเข้าเรียน</h2>
+            <button @click="goToMenu" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold transition">กลับเมนู</button>
+        </div>
+        <div class="grid grid-cols-10 gap-4 flex-grow">
+          <div class="col-span-10 md:col-span-7 h-full">
+            <div class="camera-container shadow-2xl border-4 border-gray-800 relative">
+              <video id="videoInput" autoplay muted playsinline></video>
+              <canvas id="overlay" class="overlay"></canvas>
+              <div v-if="isAiLoading" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-white z-10">
+                 <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500 mb-4"></div>
+                 <p class="text-xl font-bold animate-pulse">กำลังโหลดระบบ AI กรุณารอสักครู่...</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-span-10 md:col-span-3 bg-white rounded-2xl shadow-xl p-4 flex flex-col border border-gray-200">
+            <h3 class="font-bold text-xl border-b-2 border-indigo-100 pb-3 mb-3 text-center text-indigo-700">
+              <i class="fa-solid fa-clipboard-check"></i> สแกนสำเร็จวันนี้
+            </h3>
+            <div class="flex-grow overflow-hidden relative">
+              <div class="absolute inset-0 overflow-y-auto flex flex-col gap-3 pr-2">
+                <transition-group name="list">
+                  <div v-for="log in recentScans" :key="log.id" class="p-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-4 shadow-sm">
+                    <div class="w-12 h-12 bg-green-500 text-white rounded-full flex items-center justify-center text-xl font-bold">
+                      <i class="fa-solid fa-check"></i>
+                    </div>
+                    <div>
+                      <div class="font-bold text-gray-800 text-lg leading-tight">{{ log.name }}</div>
+                      <div class="text-sm text-gray-600 mt-1"><i class="fa-regular fa-clock"></i> {{ log.time }} | <span :class="log.status === 'มาสาย' ? 'text-orange-500 font-bold' : 'text-green-600'">{{ log.status }}</span></div>
+                    </div>
+                  </div>
+                </transition-group>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="currentTab === 'parentLogin'" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-3xl shadow-xl border-t-8 border-green-500">
+        <h2 class="text-2xl font-bold text-center mb-6">เข้าสู่ระบบผู้ปกครอง</h2>
+        <input v-model="loginData.username" placeholder="รหัสประจำตัวนักเรียน" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-4 text-lg outline-none focus:ring-2 focus:ring-green-400">
+        <input type="password" v-model="loginData.password" placeholder="รหัสผ่าน" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-6 text-lg outline-none focus:ring-2 focus:ring-green-400">
+        <button @click="handleLogin('parent')" class="w-full bg-green-500 text-white py-3.5 rounded-xl font-bold hover:bg-green-600 text-lg shadow-lg">เข้าสู่ระบบ</button>
+        <button @click="goToMenu" class="w-full mt-4 text-gray-400 hover:text-gray-600 underline">กลับเมนูหลัก</button>
+      </div>
+
+      <div v-if="currentTab === 'parentDashboard'" class="max-w-3xl mx-auto space-y-6">
+        <div class="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 relative">
+          <h2 class="text-2xl font-bold mb-6 text-gray-800"><i class="fa-solid fa-user-graduate text-green-500"></i> {{ currentUser.studentData.name }}</h2>
+          <div class="grid grid-cols-2 gap-6 mb-6 bg-gray-50 p-4 rounded-xl text-gray-700">
+            <div><span class="text-gray-400 text-sm block">รหัส</span><span class="font-bold text-lg">{{ currentUser.studentData.id }}</span></div>
+            <div><span class="text-gray-400 text-sm block">ชั้น / เลขที่</span><span class="font-bold text-lg">ม.{{ currentUser.studentData.classLevel }} / {{ currentUser.studentData.number }}</span></div>
+          </div>
+          <hr class="my-6">
+          <h3 class="font-bold text-lg mb-4 text-gray-800"><i class="fa-brands fa-telegram text-blue-500 text-2xl align-middle mr-2"></i> Telegram ID</h3>
+          <div class="flex flex-col sm:flex-row gap-3 mb-6">
+            <input v-model="telegramChatId" placeholder="ใส่ Chat ID ของคุณ" class="border-2 p-3 rounded-xl w-full outline-none focus:ring-2 focus:ring-blue-400">
+            <button @click="updateTelegram" class="bg-blue-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 shadow-lg whitespace-nowrap">บันทึก ID</button>
+          </div>
+          <h3 class="font-bold text-lg mb-4 text-gray-800"><i class="fa-solid fa-key text-orange-500 mr-2"></i> เปลี่ยนรหัสผ่าน</h3>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <input type="password" v-model="newPassword" placeholder="รหัสผ่านใหม่" class="border-2 p-3 rounded-xl w-full outline-none focus:ring-2 focus:ring-orange-400">
+            <button @click="updatePassword" class="bg-orange-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-orange-600 shadow-lg whitespace-nowrap">เปลี่ยนรหัส</button>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="currentTab === 'teacherLogin'" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-3xl shadow-xl border-t-8 border-orange-500">
+        <h2 class="text-2xl font-bold text-center mb-6">ระบบครู / ผู้ดูแลระบบ</h2>
+        <input v-model="loginData.username" placeholder="Username" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-4 text-lg outline-none focus:ring-2 focus:ring-orange-400">
+        <input type="password" v-model="loginData.password" placeholder="Password" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-6 text-lg outline-none focus:ring-2 focus:ring-orange-400">
+        <button @click="handleLogin('teacher')" class="w-full bg-orange-500 text-white py-3.5 rounded-xl font-bold hover:bg-orange-600 text-lg shadow-lg">เข้าสู่ระบบ</button>
+        <button @click="goToMenu" class="w-full mt-4 text-gray-400 hover:text-gray-600 underline">กลับเมนูหลัก</button>
+      </div>
+
+      <div v-if="currentTab === 'teacherDashboard'" class="space-y-6">
+        
+        <div v-if="currentUser.role === 'admin'" class="bg-white p-6 rounded-3xl shadow-lg border border-gray-100 mb-6">
+          <h2 class="text-xl font-bold text-indigo-700 mb-4 border-b pb-2"><i class="fa-solid fa-user-plus"></i> เพิ่มข้อมูลนักเรียนใหม่</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="space-y-3">
+              <input v-model="newStudent.id" placeholder="รหัสนักเรียน" class="w-full border-2 p-3 rounded-xl focus:ring-2 outline-none">
+              <input v-model="newStudent.name" placeholder="ชื่อ - นามสกุล" class="w-full border-2 p-3 rounded-xl focus:ring-2 outline-none">
+              <div class="flex gap-3">
+                <input v-model="newStudent.classLevel" placeholder="ชั้น (เช่น 4/1)" class="w-full border-2 p-3 rounded-xl focus:ring-2 outline-none">
+                <input v-model="newStudent.number" placeholder="เลขที่" class="w-full border-2 p-3 rounded-xl focus:ring-2 outline-none">
+              </div>
+            </div>
+            <div class="flex flex-col items-center bg-gray-50 p-4 rounded-xl border-2 border-dashed border-gray-300">
+               <div class="w-full max-w-[200px] aspect-square bg-black rounded-lg overflow-hidden mb-3 relative">
+                 <video id="adminVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
+               </div>
+               <button @click="captureAndRegister" class="bg-indigo-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-indigo-700 shadow w-full">บันทึกใบหน้าและข้อมูล</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-3xl shadow-lg border-t-8 border-orange-500 overflow-hidden">
+          <h2 class="text-xl font-bold text-gray-800 mb-6"><i class="fa-solid fa-list-check text-orange-500"></i> จัดการสถานะประจำวัน</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-gray-100 text-gray-600">
+                  <th class="p-4 font-bold">รหัส</th>
+                  <th class="p-4 font-bold">ชื่อ</th>
+                  <th class="p-4 font-bold">ชั้น/เลขที่</th>
+                  <th class="p-4 font-bold">สถานะวันนี้</th>
+                  <th class="p-4 font-bold">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-for="student in myClassStudents" :key="student.id" class="hover:bg-orange-50 transition">
+                  <td class="p-4 text-gray-500">{{ student.id }}</td>
+                  <td class="p-4 font-bold">{{ student.name }}</td>
+                  <td class="p-4 text-gray-500">{{ student.classLevel }} / {{ student.number }}</td>
+                  <td class="p-4 font-bold" :class="getStatusColor(student.todayStatus)">
+                    {{ student.todayStatus || 'ยังไม่เช็คชื่อ' }}
+                  </td>
+                  <td class="p-4 flex gap-2">
+                    <button v-if="!student.todayStatus" @click="markStatus(student, 'ลา')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold">ลา</button>
+                    <button v-if="!student.todayStatus" @click="markStatus(student, 'ขาด')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold">ขาด</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // ใส่ URL ที่ได้จากขั้นตอนที่ 1 ตรงนี้
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw4tSjxsbNFDWB8PzxtxVfBzeAZGilmqdRlb1dxxfXTsoH6ZYIOXIB_YLhJrMKXgdg3/exec"; 
+
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, getDocs, addDoc, query, where, updateDoc, doc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // ข้อมูล Firebase ของคุณ
+    const firebaseConfig = {
+      apiKey: "AIzaSyCcbcchbHCjKwCw0xnNkqE42d7ZvK0g3Fk",
+      authDomain: "scan-708a9.firebaseapp.com",
+      projectId: "scan-708a9",
+      storageBucket: "scan-708a9.firebasestorage.app",
+      messagingSenderId: "461577898006",
+      appId: "1:461577898006:web:b4019e156c4eacbe1bcd37",
+      measurementId: "G-7M1YP89VKY"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const { createApp } = Vue;
+
+    createApp({
+      data() {
+        return {
+          currentTab: 'menu',
+          currentUser: null,
+          loginData: { username: '', password: '' },
+          
+          isAiLoading: false,
+          faceMatcher: null,
+          videoStream: null,
+          scanInterval: null,
+          recentScans: [],
+          cooldowns: {}, 
+          
+          telegramChatId: '',
+          newPassword: '',
+          myClassStudents: [],
+          newStudent: { id: '', name: '', classLevel: '', number: '' }
+        }
+      },
+      async mounted() {
+        await this.autoSetupDatabase();
+      },
+      watch: {
+        currentTab(newTab) {
+          this.stopVideo();
+          if (newTab === 'scan') this.startScanSystem('videoInput');
+          if (newTab === 'teacherDashboard' && this.currentUser?.role === 'admin') {
+             this.$nextTick(() => this.startScanSystem('adminVideo', true)); 
+          }
+        }
+      },
+      methods: {
+        async autoSetupDatabase() {
+          try {
+            const q = query(collection(db, "teachers"), where("username", "==", "admin"));
+            const snap = await getDocs(q);
+            if (snap.empty) {
+              await addDoc(collection(db, "teachers"), { username: "admin", password: "1234", name: "ผู้ดูแลระบบ", role: "admin", classLevel: "all" });
+            }
+          } catch(e) { console.error(e); }
+        },
+
+        goToMenu() {
+          this.stopVideo();
+          this.currentTab = 'menu';
+        },
+
+        async startScanSystem(videoId, isRegistration = false) {
+          this.isAiLoading = true;
+          try {
+            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+            await Promise.all([
+              faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+              faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+              faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+            ]);
+
+            if (!isRegistration) {
+              const studentsSnap = await getDocs(collection(db, "students"));
+              const labeledDescriptors = [];
+              studentsSnap.forEach(doc => {
+                const data = doc.data();
+                if(data.descriptor) {
+                  const desc = new Float32Array(JSON.parse(data.descriptor));
+                  labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(data.id, [desc]));
+                }
+              });
+              if(labeledDescriptors.length > 0) this.faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
+            }
+            await this.startVideo(videoId, isRegistration);
+          } catch(e) { Swal.fire('ข้อผิดพลาด', 'โหลด AI ไม่สำเร็จ โปรดตรวจสอบอินเทอร์เน็ต', 'error'); }
+          this.isAiLoading = false;
+        },
+
+        async startVideo(videoId, isRegistration = false) {
+          const video = document.getElementById(videoId);
+          if(!video) return;
+          try {
+            this.videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+            video.srcObject = this.videoStream;
+            
+            if(!isRegistration) {
+              video.addEventListener('play', () => {
+                const canvas = document.getElementById('overlay');
+                const displaySize = { width: video.clientWidth, height: video.clientHeight };
+                faceapi.matchDimensions(canvas, displaySize);
+
+                this.scanInterval = setInterval(async () => {
+                  if(this.currentTab !== 'scan') return;
+                  const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors();
+                  const resizedDetections = faceapi.resizeResults(detections, displaySize);
+                  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                  faceapi.draw.drawDetections(canvas, resizedDetections);
+
+                  if (resizedDetections.length > 0 && this.faceMatcher) {
+                    resizedDetections.forEach(det => {
+                      const bestMatch = this.faceMatcher.findBestMatch(det.descriptor);
+                      if (bestMatch.label !== 'unknown') this.processAttendance(bestMatch.label);
+                    });
+                  }
+                }, 300);
+              });
+            }
+          } catch(err) { Swal.fire('ถูกบล็อกสิทธิ์', 'เบราว์เซอร์ไม่อนุญาตให้ใช้กล้อง', 'error'); }
+        },
+
+        stopVideo() {
+          if(this.videoStream) { this.videoStream.getTracks().forEach(t => t.stop()); this.videoStream = null; }
+          if(this.scanInterval) clearInterval(this.scanInterval);
+        },
+
+        async processAttendance(studentId) {
+          const now = Date.now();
+          if (this.cooldowns[studentId] && (now - this.cooldowns[studentId] < 60000)) return; 
+          this.cooldowns[studentId] = now;
+
+          try {
+            const q = query(collection(db, "students"), where("id", "==", studentId));
+            const snap = await getDocs(q);
+            if (snap.empty) return;
+            
+            const studentData = snap.docs[0].data();
+            const today = new Date();
+            const timeStr = today.toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
+            const dateStr = today.toISOString().split('T')[0];
+            const status = timeStr > "08:30" ? "มาสาย" : "มาปกติ";
+
+            const attQuery = query(collection(db, "attendance"), where("studentId", "==", studentId), where("date", "==", dateStr));
+            const attSnap = await getDocs(attQuery);
+            
+            if (attSnap.empty) {
+              await addDoc(collection(db, "attendance"), { studentId: studentId, name: studentData.name, classLevel: studentData.classLevel, date: dateStr, time: timeStr, status: status, timestamp: serverTimestamp() });
+              this.recentScans.unshift({ id: Date.now(), name: studentData.name, time: timeStr, status: status });
+              if(this.recentScans.length > 20) this.recentScans.pop();
+
+              // ส่งเข้า API GAS ด้วย Fetch
+              if(studentData.telegramChatId) {
+                const msg = `🔔 <b>แจ้งเตือนการเข้าเรียน</b>\nนักเรียน: ${studentData.name}\nเวลา: ${timeStr} น.\nสถานะ: ${status}`;
+                fetch(GAS_API_URL, {
+                  method: 'POST',
+                  body: JSON.stringify({ action: "telegram", chatId: studentData.telegramChatId, message: msg })
+                }).catch(e => console.error(e));
+              }
+            }
+          } catch(e) { console.error(e); }
+        },
+
+        async handleLogin(role) {
+          if(!this.loginData.username || !this.loginData.password) return Swal.fire('แจ้งเตือน', 'กรุณากรอกข้อมูล', 'warning');
+          Swal.fire({ title: 'ตรวจสอบ...', didOpen: () => Swal.showLoading() });
+          try {
+            if (role === 'parent') {
+              const q = query(collection(db, "students"), where("id", "==", this.loginData.username), where("parentPassword", "==", this.loginData.password));
+              const snap = await getDocs(q);
+              if (!snap.empty) {
+                const docData = snap.docs[0];
+                this.currentUser = { role: 'parent', docId: docData.id, name: docData.data().name, studentData: docData.data() };
+                this.telegramChatId = docData.data().telegramChatId || '';
+                this.currentTab = 'parentDashboard';
+                Swal.close();
+              } else Swal.fire('ผิดพลาด', 'รหัสผ่านไม่ถูกต้อง', 'error');
+            } else if (role === 'teacher') {
+              const q = query(collection(db, "teachers"), where("username", "==", this.loginData.username), where("password", "==", this.loginData.password));
+              const snap = await getDocs(q);
+              if (!snap.empty) {
+                const docData = snap.docs[0].data();
+                this.currentUser = { role: docData.role, name: docData.name, classLevel: docData.classLevel };
+                this.currentTab = 'teacherDashboard';
+                this.loadTeacherClass();
+                Swal.close();
+              } else Swal.fire('ผิดพลาด', 'รหัสผ่านไม่ถูกต้อง', 'error');
+            }
+          } catch(e) { Swal.fire('Error', e.message, 'error'); }
+        },
+
+        async updateTelegram() {
+          if(!this.telegramChatId) return;
+          const docRef = doc(db, "students", this.currentUser.docId);
+          await updateDoc(docRef, { telegramChatId: this.telegramChatId });
+          Swal.fire('สำเร็จ', 'บันทึก Telegram แล้ว', 'success');
+        },
+        async updatePassword() {
+          if(!this.newPassword) return;
+          const docRef = doc(db, "students", this.currentUser.docId);
+          await updateDoc(docRef, { parentPassword: this.newPassword });
+          this.currentUser.studentData.parentPassword = this.newPassword;
+          this.newPassword = '';
+          Swal.fire('สำเร็จ', 'เปลี่ยนรหัสผ่านแล้ว', 'success');
+        },
+
+        async loadTeacherClass() {
+          let q = (this.currentUser.role === 'admin') ? query(collection(db, "students")) : query(collection(db, "students"), where("classLevel", "==", this.currentUser.classLevel));
+          const snap = await getDocs(q);
+          const students = [];
+          const todayStr = new Date().toISOString().split('T')[0];
+          for (const docSnap of snap.docs) {
+            let sData = docSnap.data();
+            const attQ = query(collection(db, "attendance"), where("studentId", "==", sData.id), where("date", "==", todayStr));
+            const attSnap = await getDocs(attQ);
+            sData.todayStatus = attSnap.empty ? null : attSnap.docs[0].data().status;
+            students.push(sData);
+          }
+          this.myClassStudents = students.sort((a,b) => parseInt(a.number) - parseInt(b.number));
+        },
+
+        async markStatus(student, status) {
+          const todayStr = new Date().toISOString().split('T')[0];
+          await addDoc(collection(db, "attendance"), { studentId: student.id, name: student.name, classLevel: student.classLevel, date: todayStr, time: "-", status: status, timestamp: serverTimestamp() });
+          student.todayStatus = status;
+          Swal.fire({ toast:true, position:'top-end', icon:'success', title: `บันทึก ${status}`, showConfirmButton:false, timer:2000 });
+        },
+
+        async captureAndRegister() {
+          if(!this.newStudent.id || !this.newStudent.name || !this.newStudent.classLevel) return Swal.fire('เตือน', 'กรอกข้อมูลให้ครบ', 'warning');
+          Swal.fire({ title: 'กำลังประมวลผล...', didOpen: () => Swal.showLoading() });
+          try {
+            const video = document.getElementById('adminVideo');
+            const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+            if(!detections) return Swal.fire('ไม่พบใบหน้า', 'มองกล้องให้ชัดเจน', 'error');
+
+            const canvas = document.createElement('canvas'); canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0); 
+            const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+            const descriptorJson = JSON.stringify(Array.from(detections.descriptor));
+
+            // โยนไฟล์ให้ GAS อัปโหลดลง Drive ผ่าน Fetch
+            const response = await fetch(GAS_API_URL, {
+              method: 'POST',
+              body: JSON.stringify({ action: 'uploadImage', base64: imageBase64, fileName: this.newStudent.id + "_" + this.newStudent.name })
+            });
+            const res = await response.json();
+
+            if(res.success) {
+              await addDoc(collection(db, "students"), {
+                id: this.newStudent.id, name: this.newStudent.name, classLevel: this.newStudent.classLevel, number: this.newStudent.number, parentPassword: "1234", descriptor: descriptorJson, imageUrl: res.url, telegramChatId: ""
+              });
+              Swal.fire('สำเร็จ', 'บันทึกเรียบร้อย', 'success');
+              this.newStudent = { id: '', name: '', classLevel: '', number: '' };
+              this.loadTeacherClass(); 
+            } else Swal.fire('Error', 'เซฟรูปลง Drive ไม่สำเร็จ', 'error');
+          } catch(e) { Swal.fire('Error', e.message, 'error'); }
+        },
+
+        getStatusColor(status) {
+          if(status === 'มาปกติ') return 'text-green-600';
+          if(status === 'มาสาย') return 'text-orange-500';
+          if(status === 'ลา') return 'text-yellow-600';
+          if(status === 'ขาด') return 'text-red-600';
+          return 'text-gray-400';
+        },
+        logout() { this.currentUser = null; this.loginData = { username: '', password: '' }; this.goToMenu(); }
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
