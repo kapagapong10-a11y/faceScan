@@ -234,12 +234,34 @@
         <!-- ================= TEACHER DASHBOARD ================= -->
         <div v-if="currentTab === 'teacherDashboard'" class="space-y-6 mt-6">
             <div class="bg-white p-6 md:p-8 rounded-3xl shadow-lg border-t-8 border-orange-500 overflow-hidden relative">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4 gap-4">
-                    <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-list-check text-orange-500 mr-2"></i> เช็คชื่อนักเรียนชั้น ม.{{ currentUser.classLevel }}</h2>
-                    <div class="flex items-center gap-3">
-                        <span class="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-bold">วันที่: {{ new Date().toLocaleDateString('th-TH') }}</span>
-                        <button @click="loadTeacherClass" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2 rounded-lg font-bold transition flex items-center gap-2 shadow-sm">
-                            <i class="fa-solid fa-rotate-right"></i> รีเฟรช
+                
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 gap-4">
+                    <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-list-check text-orange-500 mr-2"></i> เช็คชื่อ ม.{{ currentUser.classLevel }}</h2>
+                    
+                    <div class="flex flex-wrap items-center gap-3">
+                        <!-- เลือกวันที่ -->
+                        <div class="relative">
+                            <input type="date" v-model="selectedDate" @change="loadTeacherClass" class="bg-gray-50 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-bold outline-none focus:ring-2 focus:ring-orange-400 cursor-pointer shadow-sm">
+                        </div>
+
+                        <!-- สถานะวันหยุด หรือ ค้างเช็ค -->
+                        <div v-if="!isSchoolDay" class="bg-gray-100 text-gray-500 px-3 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm border border-gray-200">
+                            <i class="fa-solid fa-mug-hot"></i> วันหยุด (ไม่มีการสแกน)
+                        </div>
+                        <div v-else-if="isSchoolDay && incompleteCount > 0" class="bg-red-100 text-red-600 px-3 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm border border-red-200 animate-pulse">
+                            <i class="fa-solid fa-triangle-exclamation"></i> ค้างเช็ค {{ incompleteCount }} คน
+                        </div>
+                        <div v-else class="bg-green-100 text-green-600 px-3 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm border border-green-200">
+                            <i class="fa-solid fa-check-double"></i> เช็คครบแล้ว
+                        </div>
+
+                        <!-- ปุ่มตรวจสอบวันค้างเช็คย้อนหลัง -->
+                        <button @click="findMissingChecks" class="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-2 rounded-lg font-bold transition flex items-center gap-2 shadow-sm">
+                            <i class="fa-solid fa-calendar-check"></i> วันค้างเช็ค
+                        </button>
+                        
+                        <button @click="loadTeacherClass" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-lg font-bold transition flex items-center gap-2 shadow-sm">
+                            <i class="fa-solid fa-rotate-right"></i>
                         </button>
                     </div>
                 </div>
@@ -248,17 +270,18 @@
                     <table class="w-full text-left border-collapse whitespace-nowrap">
                         <thead>
                             <tr class="bg-gray-100 text-gray-700 border-b border-gray-200">
-                                <th class="p-4 font-bold text-center">เลขประจำตัว</th>
+                                <th class="p-4 font-bold text-center w-24">เลขประจำตัว</th>
                                 <th class="p-4 font-bold">ชื่อ-นามสกุล</th>
-                                <th class="p-4 font-bold text-center">ชั้น</th>
-                                <th class="p-4 font-bold text-center w-20">เลขที่</th>
+                                <th class="p-4 font-bold text-center w-16">ชั้น</th>
+                                <th class="p-4 font-bold text-center w-16">เลขที่</th>
                                 <th class="p-4 font-bold text-center">เวลามา</th>
                                 <th class="p-4 font-bold text-center">สถานะวันนี้</th>
                                 <th class="p-4 font-bold text-center w-40">จัดการ</th>
+                                <th class="p-4 font-bold text-center w-32 border-l border-gray-300">สถิติรวม (มา/สาย/ลา/ขาด)</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
-                            <tr v-for="student in myClassStudents" :key="student.id" class="hover:bg-orange-50 transition">
+                            <tr v-for="student in myClassStudents" :key="student.id" class="hover:bg-orange-50 transition" :class="!isSchoolDay ? 'opacity-75 bg-gray-50' : ''">
                                 <td class="p-4 text-center text-gray-500">{{ student.id }}</td>
                                 <td class="p-4 font-bold text-gray-800">{{ student.name }}</td>
                                 <td class="p-4 text-center text-gray-600">ม.{{ student.classLevel }}</td>
@@ -270,18 +293,28 @@
                                     <span v-if="student.todayStatus" class="flex items-center justify-center gap-1">
                                         <i class="fa-solid fa-circle text-[10px]"></i> {{ student.todayStatus }}
                                     </span>
+                                    <span v-else-if="!isSchoolDay" class="text-gray-400 font-normal">วันหยุด</span>
                                     <span v-else class="text-gray-400 font-normal">ยังไม่เช็คชื่อ</span>
                                 </td>
-                                <td class="p-4">
-                                    <div v-if="!student.todayStatus" class="flex gap-2 justify-center">
+                                <td class="p-4 text-center">
+                                    <div v-if="isSchoolDay && !student.todayStatus" class="flex gap-2 justify-center">
                                         <button @click="markStatus(student, 'ลา')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow transition flex-1">ลา</button>
                                         <button @click="markStatus(student, 'ขาด')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow transition flex-1">ขาด</button>
                                     </div>
-                                    <div v-else class="text-center text-sm text-gray-500 italic">บันทึกแล้ว</div>
+                                    <div v-else-if="isSchoolDay && student.todayStatus" class="text-center text-sm text-gray-500 italic">บันทึกแล้ว</div>
+                                    <div v-else class="text-center text-sm text-gray-400 italic">-</div>
+                                </td>
+                                <td class="p-4 text-center border-l border-gray-100">
+                                    <div class="flex justify-center gap-1 text-xs font-bold">
+                                        <span class="bg-green-100 text-green-700 px-2 py-1 rounded" title="มาปกติ">{{ student.stats?.normal || 0 }}</span>
+                                        <span class="bg-orange-100 text-orange-700 px-2 py-1 rounded" title="มาสาย">{{ student.stats?.late || 0 }}</span>
+                                        <span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded" title="ลา">{{ student.stats?.leave || 0 }}</span>
+                                        <span class="bg-red-100 text-red-700 px-2 py-1 rounded" title="ขาด">{{ student.stats?.absent || 0 }}</span>
+                                    </div>
                                 </td>
                             </tr>
                             <tr v-if="myClassStudents.length === 0">
-                                <td colspan="7" class="p-8 text-center text-gray-500">ไม่พบข้อมูลนักเรียนในห้องนี้</td>
+                                <td colspan="8" class="p-8 text-center text-gray-500">ไม่พบข้อมูลนักเรียนในห้องนี้</td>
                             </tr>
                         </tbody>
                     </table>
@@ -605,6 +638,8 @@ const myApp = createApp({
 
             // Teacher Data
             myClassStudents: [],
+            selectedDate: new Date().toISOString().split('T')[0], // เลือกวันที่ปัจจุบันเป็นค่าเริ่มต้น
+            isSchoolDay: true, // เช็คว่าเป็นวันหยุดหรือไม่ (นับจากการที่มีสแกนหน้าอย่างน้อย 1 คน)
 
             // Admin Data
             adminSubTab: 'students',
@@ -623,7 +658,6 @@ const myApp = createApp({
     },
     computed: {
         uniqueClasses() {
-            // ป้องกันการค้างจาก Data type แบบ Number โดยบังคับใส่ String()
             const classes = this.adminData.students.map(s => String(s.classLevel || '')).filter(c => c);
             return [...new Set(classes)].sort((a,b) => a.localeCompare(b, 'th', {numeric: true}));
         },
@@ -637,10 +671,21 @@ const myApp = createApp({
                 result = result.filter(s => String(s.name || '').toLowerCase().includes(q) || String(s.id || '').includes(q));
             }
             return result;
+        },
+        incompleteCount() {
+            // นับจำนวนคนที่ยังไม่ถูกเช็คในวันนี้
+            if(!this.isSchoolDay) return 0;
+            return this.myClassStudents.filter(s => !s.todayStatus).length;
         }
     },
     async mounted() {
         await this.autoSetupDatabase();
+        // ตั้งค่าฟังก์ชันสำหรับปุ่มตรวจสอบวันค้างเช็ค เพื่อให้ใช้งานร่วมกับ SweetAlert ได้
+        window.selectMissingDate = (date) => {
+            this.selectedDate = date;
+            this.loadTeacherClass();
+            Swal.close();
+        };
     },
     watch: {
         currentTab(newTab) {
@@ -880,39 +925,130 @@ const myApp = createApp({
                 if(!snap.exists()) { this.myClassStudents = []; Swal.close(); return; }
                 
                 let students = [];
-                const todayStr = new Date().toISOString().split('T')[0];
-
                 snap.forEach(child => {
                     if(String(child.val().classLevel) === String(this.currentUser.classLevel)) students.push(child.val());
                 });
 
                 const attSnap = await get(ref(db, 'attendance'));
-                const attData = [];
+                
+                // ล้างค่าสถานะปัจจุบันและสถิติเริ่มต้น
+                students.forEach(s => {
+                    s.stats = { normal: 0, late: 0, leave: 0, absent: 0 };
+                    s.todayStatus = null;
+                    s.todayTime = '-';
+                });
+
+                let scansOnDate = 0;
+                let dateRecords = {}; // ป้องกันการนับซ้ำถ้านักเรียน 1 คนมีหลาย record ในวันเดียว
+                
                 if (attSnap.exists()) {
-                    attSnap.forEach(c => { if(c.val().date === todayStr) attData.push(c.val()); });
+                    attSnap.forEach(c => {
+                        const rec = c.val();
+                        const key = `${rec.studentId}_${rec.date}`;
+                        // ยึดเวลาแรกสุดของวัน
+                        if (!dateRecords[key] || rec.time < dateRecords[key].time) {
+                             dateRecords[key] = rec;
+                        }
+                    });
                 }
 
-                students = students.map(s => {
-                    const record = attData.find(a => String(a.studentId) === String(s.id));
-                    s.todayStatus = record ? record.status : null;
-                    s.todayTime = record ? record.time : '-';
-                    return s;
+                // นำข้อมูลที่กรองการซ้ำแล้วมาคำนวณ
+                Object.values(dateRecords).forEach(rec => {
+                    const student = students.find(s => String(s.id) === String(rec.studentId));
+                    if (student) {
+                        // สะสมสถิติรวมทั้งหมด
+                        if(rec.status === 'มาปกติ') student.stats.normal++;
+                        else if(rec.status === 'มาสาย') student.stats.late++;
+                        else if(rec.status === 'ลา') student.stats.leave++;
+                        else if(rec.status === 'ขาด') student.stats.absent++;
+
+                        // ข้อมูลของวันที่เลือกปัจจุบัน
+                        if (rec.date === this.selectedDate) {
+                            student.todayStatus = rec.status;
+                            student.todayTime = rec.time;
+                            if (rec.time !== '-') scansOnDate++; // นับจำนวนว่ามีการสแกนหน้าจริงหรือไม่ (เวลาไม่ใช่ '-')
+                        }
+                    }
                 });
+
+                // ถือเป็นวันมาเรียน ก็ต่อเมื่อมีการสแกนหน้าเข้าเรียนอย่างน้อย 1 คน
+                this.isSchoolDay = (scansOnDate > 0);
                 
-                // ป้องกันปัญหาการเรียงลำดับค้าง
                 this.myClassStudents = students.sort((a,b) => parseInt(a.number || '0', 10) - parseInt(b.number || '0', 10));
                 Swal.close();
             } catch(e) { Swal.fire('Error', e.message, 'error'); }
         },
         async markStatus(student, status) {
-            const todayStr = new Date().toISOString().split('T')[0];
+            // ใช้วันที่ตามที่ครูเลือกปัจจุบันใน Date Picker
+            const dateStrToMark = this.selectedDate;
             await push(ref(db, 'attendance'), {
                 studentId: student.id, name: student.name, classLevel: student.classLevel,
-                date: todayStr, time: "-", status: status, timestamp: serverTimestamp()
+                date: dateStrToMark, time: "-", status: status, timestamp: serverTimestamp()
             });
             student.todayStatus = status;
             student.todayTime = '-';
+            
+            // อัปเดตสถิติรวมชั่วคราว
+            if(status === 'ลา') student.stats.leave++;
+            if(status === 'ขาด') student.stats.absent++;
+
             Swal.fire({ toast:true, position:'top-end', icon:'success', title: `บันทึก ${status} สำเร็จ`, showConfirmButton:false, timer:1500 });
+        },
+        async findMissingChecks() {
+            Swal.fire({ title: 'กำลังค้นหาวันที่ค้างเช็ค...', didOpen: () => Swal.showLoading() });
+            try {
+                const attSnap = await get(ref(db, 'attendance'));
+                let dateMap = {}; 
+                const totalStudents = this.myClassStudents.length;
+                
+                if(totalStudents === 0) return Swal.fire('แจ้งเตือน', 'ไม่มีนักเรียนในห้องนี้', 'info');
+
+                if (attSnap.exists()) {
+                    attSnap.forEach(c => {
+                        const rec = c.val();
+                        if (String(rec.classLevel) === String(this.currentUser.classLevel)) {
+                            if(!dateMap[rec.date]) dateMap[rec.date] = { scans: 0, records: 0, checkedUsers: new Set() };
+                            
+                            if(!dateMap[rec.date].checkedUsers.has(rec.studentId)) {
+                                dateMap[rec.date].checkedUsers.add(rec.studentId);
+                                dateMap[rec.date].records++;
+                                if(rec.time !== '-') dateMap[rec.date].scans++;
+                            }
+                        }
+                    });
+                }
+                
+                let missingDates = [];
+                for (const [date, data] of Object.entries(dateMap)) {
+                    // ถ้ามีการสแกนอย่างน้อย 1 คน (ถือเป็นวันเปิดเรียน) และบันทึกไม่ครบนักเรียนทั้งหมด
+                    if (data.scans > 0 && data.records < totalStudents) {
+                        missingDates.push({ date, missingCount: totalStudents - data.records });
+                    }
+                }
+                
+                missingDates.sort((a,b) => new Date(b.date) - new Date(a.date)); // เรียงจากล่าสุดไปเก่า
+                
+                if (missingDates.length === 0) {
+                    Swal.fire('ยอดเยี่ยม!', 'ไม่มีวันที่ค้างเช็คชื่อครับ (เช็คครบทุกวันแล้ว)', 'success');
+                } else {
+                    let html = '<div class="flex flex-col gap-2 max-h-64 overflow-y-auto p-2">';
+                    missingDates.forEach(d => {
+                        html += `<button class="bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded-xl font-bold text-left flex justify-between items-center transition" onclick="window.selectMissingDate('${d.date}')">
+                                    <span><i class="fa-regular fa-calendar-xmark mr-2"></i> ${this.formatDate(d.date)}</span>
+                                    <span class="bg-red-500 text-white px-2 py-1 rounded-lg text-xs">ค้าง ${d.missingCount} คน</span>
+                                 </button>`;
+                    });
+                    html += '</div>';
+                    
+                    Swal.fire({
+                        title: 'วันที่ยังเช็คชื่อไม่ครบ',
+                        html: html,
+                        showConfirmButton: false,
+                        showCancelButton: true,
+                        cancelButtonText: 'ปิดหน้าต่าง'
+                    });
+                }
+            } catch(e) { Swal.fire('Error', e.message, 'error'); }
         },
         getStatusColor(status) {
             if(status === 'มาปกติ') return 'text-green-600';
