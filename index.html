@@ -84,7 +84,7 @@
               <i class="fa-solid fa-clipboard-check"></i> สแกนสำเร็จวันนี้
             </h3>
             <div class="flex-grow overflow-hidden relative">
-              <div class="absolute inset-0 overflow-y-auto flex flex-col gap-3 pr-2">
+              <div class="absolute inset-0 overflow-y-auto flex flex-col gap-3 pr-2 custom-scrollbar">
                 <transition-group name="list">
                   <div v-for="log in recentScans" :key="log.id" class="p-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-4 shadow-sm">
                     <div class="w-12 h-12 bg-green-500 text-white rounded-full flex items-center justify-center text-xl font-bold">
@@ -137,7 +137,7 @@
       <div v-if="currentTab === 'teacherDashboard'" class="space-y-6">
         
         <div v-if="currentUser.role === 'admin'" class="bg-white p-6 rounded-3xl shadow-lg border border-gray-100 mb-6">
-          <h2 class="text-xl font-bold text-indigo-700 mb-4 border-b pb-2"><i class="fa-solid fa-user-plus"></i> เพิ่มข้อมูลนักเรียนใหม่</h2>
+          <h2 class="text-xl font-bold text-indigo-700 mb-4 border-b pb-2"><i class="fa-solid fa-user-plus"></i> เพิ่มข้อมูลนักเรียนใหม่ (ระบบรวดเร็ว)</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="space-y-3">
               <input v-model="newStudent.id" placeholder="รหัสนักเรียน" class="w-full border-2 p-3 rounded-xl focus:ring-2 outline-none">
@@ -156,7 +156,9 @@
                    <p class="text-white text-xs bg-indigo-600/80 px-3 py-1.5 rounded-full mt-4 shadow-lg backdrop-blur-sm border border-indigo-400">มองกล้องให้ชัดเจน</p>
                  </div>
                </div>
-               <button @click="captureAndRegister" class="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 shadow-lg w-full transition text-lg"><i class="fa-solid fa-camera"></i> บันทึกใบหน้าและข้อมูล</button>
+               <button @click="captureAndRegister" class="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 shadow-lg w-full transition text-lg">
+                 <i class="fa-solid fa-camera"></i> สแกนและบันทึกข้อมูล
+               </button>
             </div>
           </div>
         </div>
@@ -196,7 +198,7 @@
   </div>
 
   <script type="module">
-    // !! วาง URL ของ Web App (GAS) ของคุณที่นี่ !!
+    // 🌟 ลิงก์ API ของคุณครู 🌟
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw4tSjxsbNFDWB8PzxtxVfBzeAZGilmqdRlb1dxxfXTsoH6ZYIOXIB_YLhJrMKXgdg3/exec"; 
 
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -248,14 +250,26 @@
         }
       },
       methods: {
+        // --- ระบบตั้งค่าฐานข้อมูลอัตโนมัติ ---
         async autoSetupDatabase() {
           try {
             const q = query(collection(db, "teachers"), where("username", "==", "admin"));
             const snap = await getDocs(q);
             if (snap.empty) {
               await addDoc(collection(db, "teachers"), { username: "admin", password: "1234", name: "ผู้ดูแลระบบ", role: "admin", classLevel: "all" });
+              console.log("Firebase Setup Success");
             }
-          } catch(e) { console.error(e); }
+          } catch(e) { 
+            console.error("Firebase Setup Error:", e); 
+            // แจ้งเตือนถ้า Rules ของ Firebase ถูกบล็อก
+            if(e.message.includes("permission")) {
+               Swal.fire({
+                 icon: 'error',
+                 title: 'ฐานข้อมูล Firebase ถูกบล็อก',
+                 text: 'ข้อมูลไม่สามารถบันทึกได้ กรุณาไปที่เว็บ Firebase > Firestore > Rules แล้วเปลี่ยนเป็น allow read, write: if true;'
+               });
+            }
+          }
         },
 
         goToMenu() {
@@ -305,7 +319,6 @@
 
                 this.scanInterval = setInterval(async () => {
                   if(this.currentTab !== 'scan') return;
-                  // ปรับความเร็วในการตรวจจับ (inputSize เล็กลง = เร็วขึ้น)
                   const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks().withFaceDescriptors();
                   const resizedDetections = faceapi.resizeResults(detections, displaySize);
                   canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
@@ -419,45 +432,60 @@
           Swal.fire({ toast:true, position:'top-end', icon:'success', title: `บันทึก ${status}`, showConfirmButton:false, timer:2000 });
         },
 
-        // ส่วนที่แก้ไขระบบบีบอัดรูป เพื่อความไวเหมือนเวอร์ชั่นก่อน
         async captureAndRegister() {
-          if(!this.newStudent.id || !this.newStudent.name || !this.newStudent.classLevel) return Swal.fire('เตือน', 'กรอกข้อมูลให้ครบ', 'warning');
-          Swal.fire({ title: 'กำลังประมวลผล...', text: 'กรุณามองกล้องนิ่งๆ สักครู่', didOpen: () => Swal.showLoading() });
-          
+          if(!this.newStudent.id || !this.newStudent.name || !this.newStudent.classLevel) {
+             return Swal.fire('เตือน', 'กรอกข้อมูลให้ครบ', 'warning');
+          }
+
           try {
             const video = document.getElementById('adminVideo');
-            // เร่งความเร็วการตรวจจับใบหน้า
-            const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks().withFaceDescriptor();
-            
-            if(!detections) return Swal.fire('ไม่พบใบหน้า', 'กรุณาขยับหน้าให้อยู่ในกรอบและมีแสงสว่างเพียงพอ', 'error');
 
-            // --- ระบบบีบอัดรูปภาพ (บีบไซส์ให้เล็กลงเหมือนโค้ดเดิม) ---
-            const canvas = document.createElement('canvas'); 
-            const MAX_WIDTH = 400; // ลดขนาดลงเพื่อความไวในการส่ง API
+            Swal.fire({ title: '1/3: กำลังจับภาพใบหน้า...', text: 'กรุณามองกล้องนิ่งๆ', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+
+            if(!detections) {
+                return Swal.fire('ไม่พบใบหน้า', 'มองกล้องให้ชัดเจนและอยู่ในกรอบ', 'error');
+            }
+
+            Swal.fire({ title: '2/3: กำลังอัปโหลดรูปลงระบบ...', text: 'อาจใช้เวลา 3-5 วินาที', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 300; 
             const scale = MAX_WIDTH / video.videoWidth;
-            canvas.width = MAX_WIDTH; 
+            canvas.width = MAX_WIDTH;
             canvas.height = video.videoHeight * scale;
-            
-            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height); 
-            const imageBase64 = canvas.toDataURL('image/jpeg', 0.6); // บีบอัดคุณภาพรูป
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageBase64 = canvas.toDataURL('image/jpeg', 0.6); 
             const descriptorJson = JSON.stringify(Array.from(detections.descriptor));
 
-            // โยนไฟล์ให้ GAS อัปโหลดลง Drive ผ่าน Fetch
+            // โยนภาพไปให้ GAS อัปโหลดลง Drive (เอา header ออกเพื่อป้องกันปัญหา CORS)
             const response = await fetch(GAS_API_URL, {
               method: 'POST',
               body: JSON.stringify({ action: 'uploadImage', base64: imageBase64, fileName: this.newStudent.id + "_" + this.newStudent.name })
             });
-            const res = await response.json();
 
-            if(res.success) {
-              await addDoc(collection(db, "students"), {
-                id: this.newStudent.id, name: this.newStudent.name, classLevel: this.newStudent.classLevel, number: this.newStudent.number, parentPassword: "1234", descriptor: descriptorJson, imageUrl: res.url, telegramChatId: ""
-              });
-              Swal.fire('สำเร็จ', 'บันทึกข้อมูลและใบหน้าเรียบร้อย', 'success');
-              this.newStudent = { id: '', name: '', classLevel: '', number: '' };
-              this.loadTeacherClass(); 
-            } else Swal.fire('Error', 'เซฟรูปลง Drive ไม่สำเร็จ', 'error');
-          } catch(e) { Swal.fire('Error', e.message, 'error'); }
+            const res = await response.json();
+            if(!res.success) throw new Error(res.error || res.message || "อัปโหลดรูปลง Drive ล้มเหลว");
+
+            Swal.fire({ title: '3/3: กำลังบันทึกข้อมูลเข้าฐานข้อมูล...', text: 'รอสักครู่...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            // บันทึกเข้า Firebase
+            await addDoc(collection(db, "students"), {
+              id: this.newStudent.id, name: this.newStudent.name, classLevel: this.newStudent.classLevel, number: this.newStudent.number, parentPassword: "1234", descriptor: descriptorJson, imageUrl: res.url, telegramChatId: ""
+            });
+
+            Swal.fire('สำเร็จ', 'บันทึกข้อมูลและใบหน้าเรียบร้อย', 'success');
+            this.newStudent = { id: '', name: '', classLevel: '', number: '' };
+            this.loadTeacherClass();
+
+          } catch(e) {
+            console.error(e);
+            if(e.message.includes("permission")) {
+              Swal.fire('ฐานข้อมูล Firebase ถูกบล็อก', 'คุณยังไม่ได้เปิดสิทธิ์ Firestore Rules (ทำตามขั้นตอนที่ 1 ที่ผมแจ้งไปครับ)', 'error');
+            } else {
+              Swal.fire('เกิดข้อผิดพลาด', e.message, 'error');
+            }
+          }
         },
 
         getStatusColor(status) {
