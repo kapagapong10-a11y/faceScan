@@ -25,10 +25,45 @@
         .list-enter-from { opacity: 0; transform: translateY(30px); }
         .list-leave-to { opacity: 0; transform: translateX(-30px); }
         
-        .camera-container { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 1rem; background: #000; min-height: 400px; }
-        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        /* แก้ไขเพื่อรักษาสัดส่วนกล้องตามธรรมชาติ ไม่ให้ภาพบีบ */
+        .camera-wrapper { 
+            position: relative; 
+            width: 100%; 
+            height: 100%; 
+            min-height: 400px;
+            background: #000; 
+            border-radius: 1rem; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            overflow: hidden; 
+        }
+        .video-container { 
+            position: relative; 
+            display: inline-flex; 
+            justify-content: center; 
+            align-items: center; 
+            max-width: 100%; 
+            max-height: 100%; 
+        }
+        video { 
+            display: block; 
+            max-width: 100%; 
+            max-height: 75vh; 
+            width: auto; 
+            height: auto; 
+            transform: scaleX(-1); 
+        }
         /* นำ transform: scaleX(-1) ออกจาก canvas เพื่อไม่ให้ตัวหนังสือกลับด้านเวลาวาดชื่อ พร้อมบังคับให้อยู่เลเยอร์บนสุด */
-        canvas.overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        canvas.overlay { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            pointer-events: none; 
+            z-index: 10; 
+        }
         
         .modal-enter-active, .modal-leave-active { transition: opacity 0.3s ease; }
         .modal-enter-from, .modal-leave-to { opacity: 0; }
@@ -86,12 +121,14 @@
                 <button @click="goToMenu" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold transition">กลับเมนู</button>
             </div>
             <div class="grid grid-cols-10 gap-6 flex-grow">
-                <div class="col-span-10 md:col-span-7 h-full">
-                    <div class="camera-container shadow-2xl border-4 border-gray-800 relative bg-gray-900 rounded-2xl">
-                        <video id="videoInput" autoplay muted playsinline></video>
-                        <canvas id="overlay" class="overlay"></canvas>
+                <div class="col-span-10 md:col-span-7 h-full min-h-[500px]">
+                    <div class="camera-wrapper shadow-2xl border-4 border-gray-800">
+                        <div class="video-container">
+                            <video id="videoInput" autoplay muted playsinline></video>
+                            <canvas id="overlay" class="overlay"></canvas>
+                        </div>
                         
-                        <div v-if="!isAiLoading" class="absolute top-4 left-4 z-10">
+                        <div v-if="!isAiLoading" class="absolute top-4 left-4 z-20">
                             <div class="bg-black/70 text-green-400 px-4 py-2 rounded-full text-sm font-bold backdrop-blur-md shadow-lg border border-green-500/50 flex items-center gap-2">
                                 <span class="relative flex h-3 w-3">
                                   <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -101,7 +138,7 @@
                             </div>
                         </div>
 
-                        <div v-if="isAiLoading" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-white z-20">
+                        <div v-if="isAiLoading" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-white z-30">
                             <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500 mb-4"></div>
                             <p class="text-xl font-bold animate-pulse">กำลังโหลดระบบ AI กรุณารอสักครู่...</p>
                         </div>
@@ -576,10 +613,10 @@
                         <button @click="closeFaceScanModal" class="text-white hover:text-gray-200 text-xl"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <div class="p-6 bg-gray-100 flex flex-col items-center">
-                        <div class="w-full max-w-[300px] aspect-[3/4] bg-black rounded-2xl overflow-hidden relative shadow-inner border-4 border-white mb-6">
-                            <video id="adminVideo" autoplay muted playsinline class="w-full h-full object-cover transform scale-x-[-1]"></video>
+                        <div class="w-full max-w-sm bg-black rounded-2xl overflow-hidden relative shadow-inner border-4 border-white mb-6 flex justify-center items-center">
+                            <video id="adminVideo" autoplay muted playsinline class="block w-full h-auto max-h-[50vh] transform scale-x-[-1]"></video>
                             <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                                <div class="w-[70%] h-[60%] border-2 border-dashed border-blue-400 rounded-[50%] animate-pulse relative shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"></div>
+                                <div class="w-48 h-56 border-2 border-dashed border-blue-400 rounded-[50%] animate-pulse shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]"></div>
                             </div>
                         </div>
                         <button @click="captureAndSaveFace" class="bg-blue-600 text-white px-8 py-3.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg w-full transition text-lg flex justify-center items-center gap-2">
