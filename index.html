@@ -628,8 +628,9 @@ const myApp = createApp({
             isAiLoading: false,
             faceMatcher: null,
             videoStream: null,
-            isScanning: false, // เพิ่มตัวแปรเช็คสถานะการทำงานของลูปวิดีโอ
-            studentMap: {}, // แผนที่เก็บรหัส -> ชื่อ สำหรับแสดงบนหน้าจอ
+            isScanning: false,
+            studentMap: {}, 
+            scannedToday: new Set(), // เก็บรายชื่อคนที่สแกนแล้ววันนี้ในหน่วยความจำ
             recentScans: [],
             cooldowns: {},
 
@@ -640,8 +641,8 @@ const myApp = createApp({
 
             // Teacher Data
             myClassStudents: [],
-            selectedDate: new Date().toISOString().split('T')[0], // เลือกวันที่ปัจจุบันเป็นค่าเริ่มต้น
-            isSchoolDay: true, // เช็คว่าเป็นวันหยุดหรือไม่ (นับจากการที่มีสแกนหน้าอย่างน้อย 1 คน)
+            selectedDate: new Date().toISOString().split('T')[0], 
+            isSchoolDay: true, 
 
             // Admin Data
             adminSubTab: 'students',
@@ -675,14 +676,12 @@ const myApp = createApp({
             return result;
         },
         incompleteCount() {
-            // นับจำนวนคนที่ยังไม่ถูกเช็คในวันนี้
             if(!this.isSchoolDay) return 0;
             return this.myClassStudents.filter(s => !s.todayStatus).length;
         }
     },
     async mounted() {
         await this.autoSetupDatabase();
-        // ตั้งค่าฟังก์ชันสำหรับปุ่มตรวจสอบวันค้างเช็ค เพื่อให้ใช้งานร่วมกับ SweetAlert ได้
         window.selectMissingDate = (date) => {
             this.selectedDate = date;
             this.loadTeacherClass();
@@ -735,18 +734,39 @@ const myApp = createApp({
                 if (!isRegistration) {
                     const snap = await get(ref(db, 'students'));
                     const labeledDescriptors = [];
-                    this.studentMap = {}; // ล้างข้อมูลเก่า
+                    this.studentMap = {}; 
                     
                     if (snap.exists()) {
-                        snap.forEach(child => {
-                            const data = child.val();
+                        const studentsData = snap.val();
+                        Object.keys(studentsData).forEach(key => {
+                            const data = studentsData[key];
                             if(data.descriptor) {
                                 const desc = new Float32Array(JSON.parse(data.descriptor));
                                 labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(data.id, [desc]));
-                                this.studentMap[data.id] = data.name; // เก็บชื่อไว้แสดงผล
+                                this.studentMap[data.id] = data.name; 
                             }
                         });
                     }
+
+                    // โหลดรายชื่อที่สแกนแล้วของวันนี้เพื่อกันสแกนซ้ำ และแสดงประวัติทันทีที่เข้าหน้าสแกน
+                    this.scannedToday = new Set();
+                    this.recentScans = [];
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const attSnap = await get(ref(db, 'attendance'));
+                    
+                    if (attSnap.exists()) {
+                        const todayLogs = [];
+                        attSnap.forEach(child => {
+                            const rec = child.val();
+                            if (rec.date === todayStr) {
+                                this.scannedToday.add(rec.studentId);
+                                todayLogs.push({ id: child.key, name: rec.name, time: rec.time, status: rec.status });
+                            }
+                        });
+                        // แสดงแค่ 10 คนล่าสุด เรียงจากเวลาล่าสุด
+                        this.recentScans = todayLogs.sort((a, b) => b.time.localeCompare(a.time)).slice(0, 10);
+                    }
+
                     if(labeledDescriptors.length > 0) this.faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
                 }
                 await this.startVideo(videoId, isRegistration);
@@ -765,7 +785,6 @@ const myApp = createApp({
                     video.addEventListener('play', () => {
                         const canvas = document.getElementById('overlay');
                         
-                        // ฟังก์ชันลูปประมวลผลแบบ Real-time
                         const processVideo = async () => {
                             if (!this.isScanning || this.currentTab !== 'scan') return;
                             
@@ -785,13 +804,24 @@ const myApp = createApp({
                                         const box = det.detection.box;
                                         
                                         const isKnown = bestMatch.label !== 'unknown';
-                                        const text = isKnown ? (this.studentMap[bestMatch.label] || bestMatch.label) : 'ไม่รู้จัก';
-                                        const color = isKnown ? '#22c55e' : '#ef4444'; // เขียว = รู้จัก, แดง = ไม่รู้จัก
+                                        const hasScanned = this.scannedToday.has(bestMatch.label);
+                                        
+                                        let text = 'ไม่รู้จัก';
+                                        let color = '#ef4444'; // แดง
 
-                                        // เนื่องจากวิดีโอถูกกลับซ้ายขวาด้วย CSS เราต้องกลับพิกัด X บน Canvas ให้ตรงกัน
+                                        if (isKnown) {
+                                            text = this.studentMap[bestMatch.label] || bestMatch.label;
+                                            if (hasScanned) {
+                                                text += ' (เช็คแล้ว)';
+                                                color = '#3b82f6'; // ฟ้า (ถ้าสแกนแล้ว)
+                                            } else {
+                                                color = '#22c55e'; // เขียว (ถ้ารู้จักและยังไม่สแกน)
+                                            }
+                                        }
+
                                         const mirrorX = canvas.width - box.x - box.width;
 
-                                        // 1. วาดกรอบใบหน้า (Bounding Box)
+                                        // 1. วาดกรอบใบหน้า
                                         ctx.strokeStyle = color;
                                         ctx.lineWidth = 3;
                                         ctx.strokeRect(mirrorX, box.y, box.width, box.height);
@@ -800,38 +830,33 @@ const myApp = createApp({
                                         ctx.fillStyle = color;
                                         ctx.font = 'bold 16px Sarabun';
                                         const textWidth = ctx.measureText(text).width;
-                                        // วาดพื้นหลังให้พอดีกับความยาวชื่อ
                                         ctx.fillRect(mirrorX, box.y - 30, textWidth + 16, 30);
 
-                                        // 3. เขียนข้อความชื่อนักเรียน
+                                        // 3. เขียนข้อความ
                                         ctx.fillStyle = '#ffffff';
                                         ctx.fillText(text, mirrorX + 8, box.y - 10);
 
-                                        // บันทึกการมาเรียนถ้าระบบรู้จัก
-                                        if (isKnown) {
+                                        // บันทึกเมื่อรู้จัก และ ยังไม่เคยบันทึกในวันนี้
+                                        if (isKnown && !hasScanned) {
+                                            this.scannedToday.add(bestMatch.label); // ล็อกสิทธิ์ทันทีเพื่อกันสแกนซ้ำ
                                             this.processAttendance(bestMatch.label);
                                         }
                                     });
                                 }
                             }
-                            // ใช้ requestAnimationFrame เพื่อให้การวาดลื่นไหล ไม่กระตุก
                             if (this.isScanning) requestAnimationFrame(processVideo);
                         };
                         
-                        // เริ่มต้นการทำงานของลูป
                         processVideo();
                     });
                 }
             } catch(err) { Swal.fire('ถูกบล็อกสิทธิ์', 'กรุณาอนุญาตการเข้าถึงกล้องถ่ายรูป', 'error'); }
         },
         stopVideo() {
-            this.isScanning = false; // สั่งหยุดลูปประมวลผล
+            this.isScanning = false; 
             if(this.videoStream) { this.videoStream.getTracks().forEach(t => t.stop()); this.videoStream = null; }
         },
         async processAttendance(studentId) {
-            const now = Date.now();
-            if (this.cooldowns[studentId] && (now - this.cooldowns[studentId] < 60000)) return; // 1 min cooldown
-            this.cooldowns[studentId] = now;
             try {
                 const q = query(ref(db, 'students'), orderByChild('id'), equalTo(studentId));
                 const snap = await get(q);
@@ -986,47 +1011,40 @@ const myApp = createApp({
                 });
 
                 let scansOnDate = 0;
-                let dateRecords = {}; // ป้องกันการนับซ้ำถ้านักเรียน 1 คนมีหลาย record ในวันเดียว
+                let dateRecords = {}; 
                 
                 if (attSnap.exists()) {
                     attSnap.forEach(c => {
                         const rec = c.val();
                         const key = `${rec.studentId}_${rec.date}`;
-                        // ยึดเวลาแรกสุดของวัน
                         if (!dateRecords[key] || rec.time < dateRecords[key].time) {
                              dateRecords[key] = rec;
                         }
                     });
                 }
 
-                // นำข้อมูลที่กรองการซ้ำแล้วมาคำนวณ
                 Object.values(dateRecords).forEach(rec => {
                     const student = students.find(s => String(s.id) === String(rec.studentId));
                     if (student) {
-                        // สะสมสถิติรวมทั้งหมด
                         if(rec.status === 'มาปกติ') student.stats.normal++;
                         else if(rec.status === 'มาสาย') student.stats.late++;
                         else if(rec.status === 'ลา') student.stats.leave++;
                         else if(rec.status === 'ขาด') student.stats.absent++;
 
-                        // ข้อมูลของวันที่เลือกปัจจุบัน
                         if (rec.date === this.selectedDate) {
                             student.todayStatus = rec.status;
                             student.todayTime = rec.time;
-                            if (rec.time !== '-') scansOnDate++; // นับจำนวนว่ามีการสแกนหน้าจริงหรือไม่ (เวลาไม่ใช่ '-')
+                            if (rec.time !== '-') scansOnDate++; 
                         }
                     }
                 });
 
-                // ถือเป็นวันมาเรียน ก็ต่อเมื่อมีการสแกนหน้าเข้าเรียนอย่างน้อย 1 คน
                 this.isSchoolDay = (scansOnDate > 0);
-                
                 this.myClassStudents = students.sort((a,b) => parseInt(a.number || '0', 10) - parseInt(b.number || '0', 10));
                 Swal.close();
             } catch(e) { Swal.fire('Error', e.message, 'error'); }
         },
         async markStatus(student, status) {
-            // ใช้วันที่ตามที่ครูเลือกปัจจุบันใน Date Picker
             const dateStrToMark = this.selectedDate;
             await push(ref(db, 'attendance'), {
                 studentId: student.id, name: student.name, classLevel: student.classLevel,
@@ -1035,7 +1053,6 @@ const myApp = createApp({
             student.todayStatus = status;
             student.todayTime = '-';
             
-            // อัปเดตสถิติรวมชั่วคราว
             if(status === 'ลา') student.stats.leave++;
             if(status === 'ขาด') student.stats.absent++;
 
@@ -1067,13 +1084,12 @@ const myApp = createApp({
                 
                 let missingDates = [];
                 for (const [date, data] of Object.entries(dateMap)) {
-                    // ถ้ามีการสแกนอย่างน้อย 1 คน (ถือเป็นวันเปิดเรียน) และบันทึกไม่ครบนักเรียนทั้งหมด
                     if (data.scans > 0 && data.records < totalStudents) {
                         missingDates.push({ date, missingCount: totalStudents - data.records });
                     }
                 }
                 
-                missingDates.sort((a,b) => new Date(b.date) - new Date(a.date)); // เรียงจากล่าสุดไปเก่า
+                missingDates.sort((a,b) => new Date(b.date) - new Date(a.date)); 
                 
                 if (missingDates.length === 0) {
                     Swal.fire('ยอดเยี่ยม!', 'ไม่มีวันที่ค้างเช็คชื่อครับ (เช็คครบทุกวันแล้ว)', 'success');
@@ -1121,7 +1137,6 @@ const myApp = createApp({
                     tSnap.forEach(c => { tArr.push({ key: c.key, ...c.val() }); });
                 }
 
-                // ใส่ String() ห่อตัวแปรเพื่อป้องกันจอค้างจากข้อมูลที่เป็น Number (Bug fix)
                 this.adminData.students = sArr.sort((a,b) => {
                     const cA = String(a.classLevel || '');
                     const cB = String(b.classLevel || '');
@@ -1147,7 +1162,6 @@ const myApp = createApp({
         async saveRecord() {
             const path = this.formType === 'student' ? 'students' : 'teachers';
             try {
-                // บังคับแปลงเป็น String ก่อนเซฟลง Database เพื่อป้องกันปัญหาในอนาคต
                 if(this.formType === 'student'){
                     this.formData.id = String(this.formData.id);
                     this.formData.classLevel = String(this.formData.classLevel);
@@ -1191,7 +1205,6 @@ const myApp = createApp({
             XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
             XLSX.writeFile(wb, filename);
         },
-        // EXCEL IMPORT - อัปเกรดระบบนำเข้าให้อ่านคอลัมน์ฉลาดขึ้น และบันทึกทีเดียวเร็ว 10 เท่า
         importExcel(event, type) {
             const file = event.target.files[0];
             if(!file) return;
@@ -1248,12 +1261,12 @@ const myApp = createApp({
                     if(count > 0) {
                         await update(ref(db, path), updates);
                         Swal.fire('สำเร็จ', `นำเข้าข้อมูล ${count} รายการเรียบร้อย`, 'success');
-                        this.loadAdminData(); // โหลดข้อมูลมาแสดงทันที
+                        this.loadAdminData(); 
                     } else {
                         Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลที่ตรงกับแบบฟอร์ม โปรดตรวจสอบหัวคอลัมน์ Excel อีกครั้ง', 'warning');
                     }
                 } catch(err) { Swal.fire('ผิดพลาด', 'รูปแบบไฟล์ไม่ถูกต้อง: ' + err.message, 'error'); }
-                event.target.value = null; // รีเซ็ต input ไฟล์
+                event.target.value = null; 
             };
             reader.readAsArrayBuffer(file);
         },
