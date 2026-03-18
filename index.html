@@ -1,555 +1,822 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-  <meta charset="UTF-8">
-  <title>Smart Face Attendance</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <style>
-    body { font-family: 'Sarabun', sans-serif; background-color: #f0f2f5; }
-    .list-move, .list-enter-active, .list-leave-active { transition: all 0.5s ease; }
-    .list-enter-from { opacity: 0; transform: translateY(30px); }
-    .list-leave-to { opacity: 0; transform: translateX(-30px); }
-    .camera-container { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 1rem; background: #000; min-height: 400px; }
-    video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-    canvas.overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
-  </style>
+    <meta charset="UTF-8">
+    <title>Smart Face Attendance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f0f2f5; }
+        .list-move, .list-enter-active, .list-leave-active { transition: all 0.5s ease; }
+        .list-enter-from { opacity: 0; transform: translateY(30px); }
+        .list-leave-to { opacity: 0; transform: translateX(-30px); }
+        .camera-container { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 1rem; background: #000; min-height: 400px; }
+        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        canvas.overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); pointer-events: none; }
+        .modal-enter-active, .modal-leave-active { transition: opacity 0.3s ease; }
+        .modal-enter-from, .modal-leave-to { opacity: 0; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
 </head>
 <body>
-  <div id="app" class="min-h-screen flex flex-col">
-    <nav class="bg-indigo-700 text-white shadow-md p-4 flex justify-between items-center z-20">
-      <div class="font-bold text-xl cursor-pointer flex items-center gap-2" @click="goToMenu">
-        <i class="fa-solid fa-school text-2xl"></i> ระบบเช็คชื่อ วังน้ำเย็นวิทยาคม
-      </div>
-      <div v-if="currentUser" class="flex gap-4 items-center">
-        <span class="text-sm bg-indigo-800 px-3 py-1 rounded-full"><i class="fa-solid fa-user"></i> {{ currentUser.name }}</span>
-        <button @click="logout" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-sm font-bold shadow transition">ออกจากระบบ</button>
-      </div>
+<div id="app" class="min-h-screen flex flex-col">
+    <nav class="bg-indigo-700 text-white shadow-md p-4 flex justify-between items-center z-20 sticky top-0">
+        <div class="font-bold text-xl cursor-pointer flex items-center gap-2" @click="goToMenu">
+            <i class="fa-solid fa-school text-2xl"></i> ระบบเช็คชื่อ วังน้ำเย็นวิทยาคม
+        </div>
+        <div v-if="currentUser" class="flex gap-4 items-center">
+            <span class="text-sm bg-indigo-800 px-3 py-1 rounded-full border border-indigo-600"><i class="fa-solid fa-user mr-1"></i> {{ currentUser.name }} ({{ currentUser.role }})</span>
+            <button @click="logout" class="bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg text-sm font-bold shadow transition flex items-center gap-1">
+                <i class="fa-solid fa-right-from-bracket"></i> ออกจากระบบ
+            </button>
+        </div>
     </nav>
 
-    <div class="flex-grow p-4 md:p-6 max-w-7xl mx-auto w-full">
-      <div v-if="currentTab === 'menu' && !currentUser" class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
-        <div @click="currentTab = 'scan'" class="bg-white p-8 rounded-2xl shadow-lg text-center cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition border-t-4 border-blue-500">
-          <i class="fa-solid fa-camera text-6xl text-blue-500 mb-4"></i>
-          <h2 class="text-2xl font-bold text-gray-800">จุดสแกนหน้า</h2>
-          <p class="text-gray-500 text-sm mt-2">สำหรับตั้งกล้องเช็คชื่อนักเรียน</p>
-        </div>
-        <div @click="currentTab = 'parentLogin'" class="bg-white p-8 rounded-2xl shadow-lg text-center cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition border-t-4 border-green-500">
-          <i class="fa-solid fa-users text-6xl text-green-500 mb-4"></i>
-          <h2 class="text-2xl font-bold text-gray-800">ระบบผู้ปกครอง</h2>
-          <p class="text-gray-500 text-sm mt-2">ดูสถิติและตั้งค่า Telegram</p>
-        </div>
-        <div @click="currentTab = 'teacherLogin'" class="bg-white p-8 rounded-2xl shadow-lg text-center cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition border-t-4 border-orange-500">
-          <i class="fa-solid fa-chalkboard-user text-6xl text-orange-500 mb-4"></i>
-          <h2 class="text-2xl font-bold text-gray-800">ครูที่ปรึกษา / แอดมิน</h2>
-          <p class="text-gray-500 text-sm mt-2">จัดการข้อมูลและสถานะการเรียน</p>
-        </div>
-      </div>
-
-      <div v-if="currentTab === 'scan'" class="h-[80vh] flex flex-col">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-expand text-blue-500"></i> จุดสแกนเช็คชื่อเข้าเรียน</h2>
-            <button @click="goToMenu" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold transition">กลับเมนู</button>
-        </div>
-        <div class="grid grid-cols-10 gap-4 flex-grow">
-          <div class="col-span-10 md:col-span-7 h-full">
-            <div class="camera-container shadow-2xl border-4 border-gray-800 relative">
-              <video id="videoInput" autoplay muted playsinline></video>
-              <canvas id="overlay" class="overlay"></canvas>
-              
-              <div v-if="!isAiLoading" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                <div class="w-48 h-64 sm:w-64 sm:h-80 border-2 border-dashed border-green-400 rounded-[50px] relative animate-[pulse_2s_ease-in-out_infinite] mb-6">
-                  <div class="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-green-500 rounded-tl-[40px]"></div>
-                  <div class="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-green-500 rounded-tr-[40px]"></div>
-                  <div class="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-green-500 rounded-bl-[40px]"></div>
-                  <div class="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-green-500 rounded-br-[40px]"></div>
-                </div>
-                <div class="bg-black/60 text-white px-5 py-2.5 rounded-full text-sm font-bold backdrop-blur-md shadow-lg border border-white/20">
-                   <i class="fa-solid fa-expand"></i> กรุณาวางใบหน้าให้อยู่ในกรอบ
-                </div>
-              </div>
-
-              <div v-if="isAiLoading" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-white z-20">
-                 <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500 mb-4"></div>
-                 <p class="text-xl font-bold animate-pulse">กำลังโหลดระบบ AI กรุณารอสักครู่...</p>
-              </div>
+    <div class="flex-grow p-4 md:p-6 max-w-7xl mx-auto w-full relative">
+        <div v-if="currentTab === 'menu' && !currentUser" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mt-10">
+            <div @click="currentTab = 'scan'" class="bg-white p-8 rounded-2xl shadow-lg text-center cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition border-t-4 border-blue-500 group">
+                <i class="fa-solid fa-camera text-6xl text-blue-500 mb-4 group-hover:scale-110 transition"></i>
+                <h2 class="text-xl font-bold text-gray-800">จุดสแกนหน้า</h2>
+                <p class="text-gray-500 text-sm mt-2">สำหรับตั้งกล้องเช็คชื่อนักเรียน</p>
             </div>
-          </div>
-          <div class="col-span-10 md:col-span-3 bg-white rounded-2xl shadow-xl p-4 flex flex-col border border-gray-200">
-            <h3 class="font-bold text-xl border-b-2 border-indigo-100 pb-3 mb-3 text-center text-indigo-700">
-              <i class="fa-solid fa-clipboard-check"></i> สแกนสำเร็จวันนี้
-            </h3>
-            <div class="flex-grow overflow-hidden relative">
-              <div class="absolute inset-0 overflow-y-auto flex flex-col gap-3 pr-2 custom-scrollbar">
-                <transition-group name="list">
-                  <div v-for="log in recentScans" :key="log.id" class="p-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-4 shadow-sm">
-                    <div class="w-12 h-12 bg-green-500 text-white rounded-full flex items-center justify-center text-xl font-bold">
-                      <i class="fa-solid fa-check"></i>
+            <div @click="currentTab = 'parentLogin'" class="bg-white p-8 rounded-2xl shadow-lg text-center cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition border-t-4 border-green-500 group">
+                <i class="fa-solid fa-users text-6xl text-green-500 mb-4 group-hover:scale-110 transition"></i>
+                <h2 class="text-xl font-bold text-gray-800">ระบบผู้ปกครอง</h2>
+                <p class="text-gray-500 text-sm mt-2">ดูสถิติและตั้งค่า Telegram</p>
+            </div>
+            <div @click="currentTab = 'teacherLogin'" class="bg-white p-8 rounded-2xl shadow-lg text-center cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition border-t-4 border-orange-500 group">
+                <i class="fa-solid fa-chalkboard-user text-6xl text-orange-500 mb-4 group-hover:scale-110 transition"></i>
+                <h2 class="text-xl font-bold text-gray-800">ครูที่ปรึกษา</h2>
+                <p class="text-gray-500 text-sm mt-2">เช็คชื่อรายวันและตรวจสอบ</p>
+            </div>
+            <div @click="currentTab = 'adminLogin'" class="bg-white p-8 rounded-2xl shadow-lg text-center cursor-pointer hover:-translate-y-1 hover:shadow-2xl transition border-t-4 border-purple-600 group">
+                <i class="fa-solid fa-user-shield text-6xl text-purple-600 mb-4 group-hover:scale-110 transition"></i>
+                <h2 class="text-xl font-bold text-gray-800">ผู้ดูแลระบบ</h2>
+                <p class="text-gray-500 text-sm mt-2">จัดการข้อมูลทั้งระบบ</p>
+            </div>
+        </div>
+
+        <div v-if="currentTab === 'scan'" class="h-[80vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-expand text-blue-500"></i> จุดสแกนเช็คชื่อเข้าเรียน</h2>
+                <button @click="goToMenu" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-bold transition">กลับเมนู</button>
+            </div>
+            <div class="grid grid-cols-10 gap-6 flex-grow">
+                <div class="col-span-10 md:col-span-7 h-full">
+                    <div class="camera-container shadow-2xl border-4 border-gray-800 relative bg-gray-900 rounded-2xl">
+                        <video id="videoInput" autoplay muted playsinline></video>
+                        <canvas id="overlay" class="overlay"></canvas>
+                        
+                        <div v-if="!isAiLoading" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+                            <div class="w-48 h-64 sm:w-64 sm:h-80 border-2 border-dashed border-green-400 rounded-[50px] relative animate-[pulse_2s_ease-in-out_infinite] mb-6 shadow-[0_0_0_9999px_rgba(0,0,0,0.3)]">
+                                <div class="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-green-500 rounded-tl-[40px]"></div>
+                                <div class="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-green-500 rounded-tr-[40px]"></div>
+                                <div class="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-green-500 rounded-bl-[40px]"></div>
+                                <div class="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-green-500 rounded-br-[40px]"></div>
+                            </div>
+                            <div class="bg-black/70 text-white px-6 py-3 rounded-full text-lg font-bold backdrop-blur-md shadow-lg border border-white/20">
+                                <i class="fa-solid fa-expand"></i> กรุณาวางใบหน้าให้อยู่ในกรอบ
+                            </div>
+                        </div>
+                        <div v-if="isAiLoading" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-white z-20">
+                            <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500 mb-4"></div>
+                            <p class="text-xl font-bold animate-pulse">กำลังโหลดระบบ AI กรุณารอสักครู่...</p>
+                        </div>
                     </div>
-                    <div>
-                      <div class="font-bold text-gray-800 text-lg leading-tight">{{ log.name }}</div>
-                      <div class="text-sm text-gray-600 mt-1"><i class="fa-regular fa-clock"></i> {{ log.time }} | <span :class="log.status === 'มาสาย' ? 'text-orange-500 font-bold' : 'text-green-600'">{{ log.status }}</span></div>
+                </div>
+                <div class="col-span-10 md:col-span-3 bg-white rounded-2xl shadow-xl p-5 flex flex-col border border-gray-200">
+                    <h3 class="font-bold text-xl border-b-2 border-indigo-100 pb-3 mb-4 text-center text-indigo-700">
+                        <i class="fa-solid fa-clipboard-check"></i> สแกนสำเร็จวันนี้
+                    </h3>
+                    <div class="flex-grow overflow-hidden relative">
+                        <div class="absolute inset-0 overflow-y-auto flex flex-col gap-3 pr-2 custom-scrollbar">
+                            <transition-group name="list">
+                                <div v-for="log in recentScans" :key="log.id" class="p-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-4 shadow-sm">
+                                    <div class="w-12 h-12 bg-green-500 text-white rounded-full flex items-center justify-center text-xl font-bold shrink-0">
+                                        <i class="fa-solid fa-check"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="font-bold text-gray-800 text-md truncate">{{ log.name }}</div>
+                                        <div class="text-sm text-gray-600 mt-0.5"><i class="fa-regular fa-clock"></i> {{ log.time }} | 
+                                            <span :class="log.status === 'มาสาย' ? 'text-orange-500 font-bold' : 'text-green-600'">{{ log.status }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </transition-group>
+                            <div v-if="recentScans.length === 0" class="text-center text-gray-400 mt-10">
+                                <i class="fa-solid fa-users-viewfinder text-4xl mb-2 opacity-50"></i>
+                                <p>รอการสแกน...</p>
+                            </div>
+                        </div>
                     </div>
-                  </div>
-                </transition-group>
-              </div>
+                </div>
             </div>
-          </div>
         </div>
-      </div>
 
-      <div v-if="currentTab === 'parentLogin'" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-3xl shadow-xl border-t-8 border-green-500">
-        <h2 class="text-2xl font-bold text-center mb-6">เข้าสู่ระบบผู้ปกครอง</h2>
-        <input v-model="loginData.username" placeholder="รหัสประจำตัวนักเรียน" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-4 text-lg outline-none focus:ring-2 focus:ring-green-400">
-        <input type="password" v-model="loginData.password" placeholder="รหัสผ่าน" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-6 text-lg outline-none focus:ring-2 focus:ring-green-400">
-        <button @click="handleLogin('parent')" class="w-full bg-green-500 text-white py-3.5 rounded-xl font-bold hover:bg-green-600 text-lg shadow-lg">เข้าสู่ระบบ</button>
-        <button @click="goToMenu" class="w-full mt-4 text-gray-400 hover:text-gray-600 underline">กลับเมนูหลัก</button>
-      </div>
-
-      <div v-if="currentTab === 'parentDashboard'" class="max-w-3xl mx-auto space-y-6">
-        <div class="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 relative">
-          <h2 class="text-2xl font-bold mb-6 text-gray-800"><i class="fa-solid fa-user-graduate text-green-500"></i> {{ currentUser.studentData.name }}</h2>
-          <div class="grid grid-cols-2 gap-6 mb-6 bg-gray-50 p-4 rounded-xl text-gray-700">
-            <div><span class="text-gray-400 text-sm block">รหัส</span><span class="font-bold text-lg">{{ currentUser.studentData.id }}</span></div>
-            <div><span class="text-gray-400 text-sm block">ชั้น / เลขที่</span><span class="font-bold text-lg">ม.{{ currentUser.studentData.classLevel }} / {{ currentUser.studentData.number }}</span></div>
-          </div>
-          <hr class="my-6">
-          <h3 class="font-bold text-lg mb-4 text-gray-800"><i class="fa-brands fa-telegram text-blue-500 text-2xl align-middle mr-2"></i> Telegram ID</h3>
-          <div class="flex flex-col sm:flex-row gap-3 mb-6">
-            <input v-model="telegramChatId" placeholder="ใส่ Chat ID ของคุณ" class="border-2 p-3 rounded-xl w-full outline-none focus:ring-2 focus:ring-blue-400">
-            <button @click="updateTelegram" class="bg-blue-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 shadow-lg whitespace-nowrap">บันทึก ID</button>
-          </div>
+        <div v-if="currentTab === 'parentLogin'" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-3xl shadow-xl border-t-8 border-green-500">
+            <h2 class="text-2xl font-bold text-center mb-6 text-gray-800"><i class="fa-solid fa-users text-green-500"></i> เข้าสู่ระบบผู้ปกครอง</h2>
+            <input v-model="loginData.username" placeholder="รหัสประจำตัวนักเรียน" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-4 text-lg outline-none focus:ring-2 focus:ring-green-400">
+            <input type="password" v-model="loginData.password" placeholder="รหัสผ่าน" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-6 text-lg outline-none focus:ring-2 focus:ring-green-400" @keyup.enter="handleLogin('parent')">
+            <button @click="handleLogin('parent')" class="w-full bg-green-500 text-white py-3.5 rounded-xl font-bold hover:bg-green-600 text-lg shadow-lg transition">เข้าสู่ระบบ</button>
+            <button @click="goToMenu" class="w-full mt-4 text-gray-400 hover:text-gray-600 underline">กลับเมนูหลัก</button>
         </div>
-      </div>
 
-      <div v-if="currentTab === 'teacherLogin'" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-3xl shadow-xl border-t-8 border-orange-500">
-        <h2 class="text-2xl font-bold text-center mb-6">ระบบครู / ผู้ดูแลระบบ</h2>
-        <input v-model="loginData.username" placeholder="Username" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-4 text-lg outline-none focus:ring-2 focus:ring-orange-400">
-        <input type="password" v-model="loginData.password" placeholder="Password" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-6 text-lg outline-none focus:ring-2 focus:ring-orange-400">
-        <button @click="handleLogin('teacher')" class="w-full bg-orange-500 text-white py-3.5 rounded-xl font-bold hover:bg-orange-600 text-lg shadow-lg">เข้าสู่ระบบ</button>
-        <button @click="goToMenu" class="w-full mt-4 text-gray-400 hover:text-gray-600 underline">กลับเมนูหลัก</button>
-      </div>
+        <div v-if="currentTab === 'teacherLogin'" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-3xl shadow-xl border-t-8 border-orange-500">
+            <h2 class="text-2xl font-bold text-center mb-6 text-gray-800"><i class="fa-solid fa-chalkboard-user text-orange-500"></i> เข้าสู่ระบบครูที่ปรึกษา</h2>
+            <input v-model="loginData.username" placeholder="Username" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-4 text-lg outline-none focus:ring-2 focus:ring-orange-400">
+            <input type="password" v-model="loginData.password" placeholder="Password" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-6 text-lg outline-none focus:ring-2 focus:ring-orange-400" @keyup.enter="handleLogin('teacher')">
+            <button @click="handleLogin('teacher')" class="w-full bg-orange-500 text-white py-3.5 rounded-xl font-bold hover:bg-orange-600 text-lg shadow-lg transition">เข้าสู่ระบบ</button>
+            <button @click="goToMenu" class="w-full mt-4 text-gray-400 hover:text-gray-600 underline">กลับเมนูหลัก</button>
+        </div>
 
-      <div v-if="currentTab === 'teacherDashboard'" class="space-y-6">
-        
-        <div v-if="currentUser.role === 'admin'" class="bg-white p-6 rounded-3xl shadow-lg border border-gray-100 mb-6">
-          <h2 class="text-xl font-bold text-indigo-700 mb-4 border-b pb-2"><i class="fa-solid fa-user-plus"></i> เพิ่มข้อมูลนักเรียนใหม่ (ระบบรวดเร็ว)</h2>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="space-y-3">
-              <input v-model="newStudent.id" placeholder="รหัสนักเรียน" class="w-full border-2 p-3 rounded-xl focus:ring-2 outline-none">
-              <input v-model="newStudent.name" placeholder="ชื่อ - นามสกุล" class="w-full border-2 p-3 rounded-xl focus:ring-2 outline-none">
-              <div class="flex gap-3">
-                <input v-model="newStudent.classLevel" placeholder="ชั้น (เช่น 4/1)" class="w-full border-2 p-3 rounded-xl focus:ring-2 outline-none">
-                <input v-model="newStudent.number" placeholder="เลขที่" class="w-full border-2 p-3 rounded-xl focus:ring-2 outline-none">
-              </div>
+        <div v-if="currentTab === 'adminLogin'" class="max-w-md mx-auto mt-10 bg-white p-8 rounded-3xl shadow-xl border-t-8 border-purple-600">
+            <h2 class="text-2xl font-bold text-center mb-6 text-gray-800"><i class="fa-solid fa-user-shield text-purple-600"></i> สำหรับผู้ดูแลระบบ</h2>
+            <input v-model="loginData.username" placeholder="Admin Username" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-4 text-lg outline-none focus:ring-2 focus:ring-purple-400">
+            <input type="password" v-model="loginData.password" placeholder="Password" class="w-full border-2 border-gray-200 p-3 rounded-xl mb-6 text-lg outline-none focus:ring-2 focus:ring-purple-400" @keyup.enter="handleLogin('admin')">
+            <button @click="handleLogin('admin')" class="w-full bg-purple-600 text-white py-3.5 rounded-xl font-bold hover:bg-purple-700 text-lg shadow-lg transition">เข้าสู่ระบบ</button>
+            <button @click="goToMenu" class="w-full mt-4 text-gray-400 hover:text-gray-600 underline">กลับเมนูหลัก</button>
+        </div>
+
+        <div v-if="currentTab === 'parentDashboard'" class="max-w-3xl mx-auto space-y-6 mt-6">
+            <div class="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 relative">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800"><i class="fa-solid fa-user-graduate text-green-500"></i> ข้อมูลนักเรียน: {{ currentUser.studentData.name }}</h2>
+                <div class="grid grid-cols-2 gap-6 mb-6 bg-gray-50 p-6 rounded-xl text-gray-700 border border-gray-200">
+                    <div><span class="text-gray-400 text-sm block mb-1">รหัสประจำตัว</span><span class="font-bold text-xl">{{ currentUser.studentData.id }}</span></div>
+                    <div><span class="text-gray-400 text-sm block mb-1">ชั้น / เลขที่</span><span class="font-bold text-xl">ม.{{ currentUser.studentData.classLevel }} / {{ currentUser.studentData.number }}</span></div>
+                </div>
+                <hr class="my-6 border-gray-200">
+                <h3 class="font-bold text-lg mb-4 text-gray-800 flex items-center">
+                    <i class="fa-brands fa-telegram text-blue-500 text-2xl mr-3"></i> ตั้งค่าการแจ้งเตือน Telegram
+                </h3>
+                <div class="flex flex-col sm:flex-row gap-3 mb-2">
+                    <input v-model="telegramChatId" placeholder="ใส่ Chat ID ของคุณ" class="border-2 p-3 rounded-xl w-full outline-none focus:ring-2 focus:ring-blue-400">
+                    <button @click="updateTelegram" class="bg-blue-500 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 shadow-lg whitespace-nowrap transition">บันทึก ID</button>
+                </div>
+                <p class="text-sm text-gray-500 mt-2"><i class="fa-solid fa-circle-info"></i> แจ้งเตือนเมื่อนักเรียนสแกนหน้าเข้าเรียนสำเร็จ</p>
             </div>
-            
-            <div class="flex flex-col items-center bg-gray-50 p-4 rounded-xl border-2 border-dashed border-gray-300">
-               <div class="w-full max-w-[220px] aspect-[3/4] bg-black rounded-2xl overflow-hidden mb-4 relative shadow-xl border-4 border-indigo-100">
-                 <video id="adminVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
-                 <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                   <div class="w-[70%] h-[60%] border-2 border-dashed border-indigo-300 rounded-[50%] animate-pulse relative shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"></div>
-                   <p class="text-white text-xs bg-indigo-600/80 px-3 py-1.5 rounded-full mt-4 shadow-lg backdrop-blur-sm border border-indigo-400">มองกล้องให้ชัดเจน</p>
-                 </div>
-               </div>
-               <button @click="captureAndRegister" class="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 shadow-lg w-full transition text-lg">
-                 <i class="fa-solid fa-camera"></i> สแกนและบันทึกข้อมูล
-               </button>
-            </div>
-          </div>
         </div>
 
-        <div class="bg-white p-6 rounded-3xl shadow-lg border-t-8 border-orange-500 overflow-hidden">
-          <h2 class="text-xl font-bold text-gray-800 mb-6"><i class="fa-solid fa-list-check text-orange-500"></i> จัดการสถานะประจำวัน</h2>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-              <thead>
-                <tr class="bg-gray-100 text-gray-600">
-                  <th class="p-4 font-bold">รหัส</th>
-                  <th class="p-4 font-bold">ชื่อ</th>
-                  <th class="p-4 font-bold">ชั้น/เลขที่</th>
-                  <th class="p-4 font-bold">สถานะวันนี้</th>
-                  <th class="p-4 font-bold">จัดการ</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <tr v-for="student in myClassStudents" :key="student.id" class="hover:bg-orange-50 transition">
-                  <td class="p-4 text-gray-500">{{ student.id }}</td>
-                  <td class="p-4 font-bold">{{ student.name }}</td>
-                  <td class="p-4 text-gray-500">{{ student.classLevel }} / {{ student.number }}</td>
-                  <td class="p-4 font-bold" :class="getStatusColor(student.todayStatus)">
-                    {{ student.todayStatus || 'ยังไม่เช็คชื่อ' }}
-                  </td>
-                  <td class="p-4 flex gap-2">
-                    <button v-if="!student.todayStatus" @click="markStatus(student, 'ลา')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold">ลา</button>
-                    <button v-if="!student.todayStatus" @click="markStatus(student, 'ขาด')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold">ขาด</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        <div v-if="currentTab === 'teacherDashboard'" class="space-y-6 mt-6">
+            <div class="bg-white p-6 md:p-8 rounded-3xl shadow-lg border-t-8 border-orange-500 overflow-hidden relative">
+                <div class="flex justify-between items-center mb-6 border-b pb-4">
+                    <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-list-check text-orange-500 mr-2"></i> เช็คชื่อนักเรียนชั้น ม.{{ currentUser.classLevel }}</h2>
+                    <span class="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg font-bold">วันที่: {{ new Date().toLocaleDateString('th-TH') }}</span>
+                </div>
+                
+                <div class="overflow-x-auto rounded-xl border border-gray-200">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700 border-b border-gray-200">
+                                <th class="p-4 font-bold w-20">เลขที่</th>
+                                <th class="p-4 font-bold w-32">รหัส</th>
+                                <th class="p-4 font-bold">ชื่อ - นามสกุล</th>
+                                <th class="p-4 font-bold w-40">สถานะวันนี้</th>
+                                <th class="p-4 font-bold text-center w-48">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr v-for="student in myClassStudents" :key="student.id" class="hover:bg-orange-50 transition">
+                                <td class="p-4 text-center font-bold text-gray-500">{{ student.number }}</td>
+                                <td class="p-4 text-gray-500">{{ student.id }}</td>
+                                <td class="p-4 font-bold text-gray-800">{{ student.name }}</td>
+                                <td class="p-4 font-bold" :class="getStatusColor(student.todayStatus)">
+                                    <span v-if="student.todayStatus" class="flex items-center gap-1">
+                                        <i class="fa-solid fa-circle text-[10px]"></i> {{ student.todayStatus }}
+                                    </span>
+                                    <span v-else class="text-gray-400 font-normal">ยังไม่เช็คชื่อ</span>
+                                </td>
+                                <td class="p-4">
+                                    <div v-if="!student.todayStatus" class="flex gap-2 justify-center">
+                                        <button @click="markStatus(student, 'ลา')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow transition flex-1">ลา</button>
+                                        <button @click="markStatus(student, 'ขาด')" class="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-sm font-bold shadow transition flex-1">ขาด</button>
+                                    </div>
+                                    <div v-else class="text-center text-sm text-gray-500 italic">บันทึกแล้ว</div>
+                                </td>
+                            </tr>
+                            <tr v-if="myClassStudents.length === 0">
+                                <td colspan="5" class="p-8 text-center text-gray-500">ไม่พบข้อมูลนักเรียนในชั้นนี้</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-      </div>
+
+        <div v-if="currentTab === 'adminDashboard'" class="space-y-6 mt-2">
+            <div class="flex flex-wrap gap-2 bg-white p-2 rounded-2xl shadow-sm border border-gray-200">
+                <button @click="adminSubTab = 'students'" :class="adminSubTab === 'students' ? 'bg-purple-100 text-purple-700 font-bold' : 'text-gray-600 hover:bg-gray-100'" class="px-5 py-2.5 rounded-xl transition flex-1 sm:flex-none text-center">
+                    <i class="fa-solid fa-users mr-1"></i> จัดการนักเรียน
+                </button>
+                <button @click="adminSubTab = 'scan'" :class="adminSubTab === 'scan' ? 'bg-blue-100 text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-100'" class="px-5 py-2.5 rounded-xl transition flex-1 sm:flex-none text-center">
+                    <i class="fa-solid fa-face-viewfinder mr-1"></i> บันทึกใบหน้า
+                </button>
+                <button @click="adminSubTab = 'teachers'" :class="adminSubTab === 'teachers' ? 'bg-orange-100 text-orange-700 font-bold' : 'text-gray-600 hover:bg-gray-100'" class="px-5 py-2.5 rounded-xl transition flex-1 sm:flex-none text-center">
+                    <i class="fa-solid fa-chalkboard-user mr-1"></i> จัดการครูที่ปรึกษา
+                </button>
+            </div>
+
+            <div v-if="adminSubTab === 'students'" class="bg-white p-6 rounded-3xl shadow-lg border-t-8 border-purple-500">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-users"></i> ฐานข้อมูลนักเรียน</h2>
+                    <div class="flex flex-wrap gap-2">
+                        <button @click="downloadTemplate('student')" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold transition">
+                            <i class="fa-solid fa-download"></i> โหลดฟอร์ม Excel
+                        </button>
+                        <label class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold cursor-pointer transition shadow">
+                            <i class="fa-solid fa-file-excel"></i> นำเข้า Excel
+                            <input type="file" accept=".xlsx, .xls" class="hidden" @change="importExcel($event, 'student')">
+                        </label>
+                        <button @click="openModal('student')" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow">
+                            <i class="fa-solid fa-plus"></i> เพิ่มรายบุคคล
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-gray-200">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-gray-50 border-b">
+                                <th class="p-3 font-bold">รหัส</th>
+                                <th class="p-3 font-bold">ชื่อ - นามสกุล</th>
+                                <th class="p-3 font-bold">ชั้น</th>
+                                <th class="p-3 font-bold">เลขที่</th>
+                                <th class="p-3 font-bold">รหัสผ่าน (ผู้ปกครอง)</th>
+                                <th class="p-3 font-bold text-center">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr v-for="s in adminData.students" :key="s.key" class="hover:bg-gray-50">
+                                <td class="p-3">{{ s.id }}</td>
+                                <td class="p-3 font-bold">{{ s.name }}</td>
+                                <td class="p-3 text-center">{{ s.classLevel }}</td>
+                                <td class="p-3 text-center">{{ s.number }}</td>
+                                <td class="p-3 text-gray-500">{{ s.parentPassword }}</td>
+                                <td class="p-3 text-center flex justify-center gap-2">
+                                    <button @click="editRecord(s, 'student')" class="text-blue-500 hover:bg-blue-100 p-2 rounded"><i class="fa-solid fa-pen"></i></button>
+                                    <button @click="deleteRecord(s.key, 'students')" class="text-red-500 hover:bg-red-100 p-2 rounded"><i class="fa-solid fa-trash"></i></button>
+                                </td>
+                            </tr>
+                            <tr v-if="adminData.students.length === 0"><td colspan="6" class="p-8 text-center text-gray-500">ไม่มีข้อมูลนักเรียน</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div v-if="adminSubTab === 'scan'" class="bg-white p-6 rounded-3xl shadow-lg border-t-8 border-blue-500">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-face-viewfinder"></i> บันทึกใบหน้าเข้าระบบ</h2>
+                    <input v-model="searchQuery" placeholder="ค้นหาชื่อ หรือ รหัส..." class="border p-2 rounded-lg outline-none focus:ring-2 focus:ring-blue-300 w-64">
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div v-for="s in filteredStudents" :key="s.key" class="border rounded-xl p-4 flex justify-between items-center hover:shadow-md transition bg-gray-50">
+                        <div>
+                            <div class="font-bold text-gray-800">{{ s.name }}</div>
+                            <div class="text-sm text-gray-500">รหัส: {{ s.id }} | ม.{{ s.classLevel }}/{{ s.number }}</div>
+                            <div class="mt-2 text-xs font-bold" :class="s.descriptor ? 'text-green-600' : 'text-red-500'">
+                                <i :class="s.descriptor ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"></i> 
+                                {{ s.descriptor ? 'มีข้อมูลใบหน้าแล้ว' : 'ยังไม่บันทึกใบหน้า' }}
+                            </div>
+                        </div>
+                        <button @click="openFaceScanModal(s)" class="h-12 w-12 rounded-full flex items-center justify-center text-white shadow-md transition" :class="s.descriptor ? 'bg-blue-500 hover:bg-blue-600' : 'bg-pink-500 hover:bg-pink-600 animate-pulse'">
+                            <i class="fa-solid fa-camera text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="adminSubTab === 'teachers'" class="bg-white p-6 rounded-3xl shadow-lg border-t-8 border-orange-500">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-chalkboard-user"></i> จัดการครูที่ปรึกษา</h2>
+                    <div class="flex flex-wrap gap-2">
+                        <button @click="downloadTemplate('teacher')" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold transition">
+                            <i class="fa-solid fa-download"></i> โหลดฟอร์ม Excel
+                        </button>
+                        <label class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold cursor-pointer transition shadow">
+                            <i class="fa-solid fa-file-excel"></i> นำเข้า Excel
+                            <input type="file" accept=".xlsx, .xls" class="hidden" @change="importExcel($event, 'teacher')">
+                        </label>
+                        <button @click="openModal('teacher')" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition shadow">
+                            <i class="fa-solid fa-plus"></i> เพิ่มรายบุคคล
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-gray-200">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-gray-50 border-b">
+                                <th class="p-3 font-bold">Username</th>
+                                <th class="p-3 font-bold">รหัสผ่าน</th>
+                                <th class="p-3 font-bold">ชื่อ - นามสกุล</th>
+                                <th class="p-3 font-bold">ที่ปรึกษาชั้น (เช่น 4/1)</th>
+                                <th class="p-3 font-bold text-center">จัดการ</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr v-for="t in adminData.teachers" :key="t.key" class="hover:bg-gray-50">
+                                <td class="p-3">{{ t.username }}</td>
+                                <td class="p-3 text-gray-500">{{ t.password }}</td>
+                                <td class="p-3 font-bold">{{ t.name }}</td>
+                                <td class="p-3 text-center">ม.{{ t.classLevel }}</td>
+                                <td class="p-3 text-center flex justify-center gap-2">
+                                    <button v-if="t.role !== 'admin'" @click="editRecord(t, 'teacher')" class="text-blue-500 hover:bg-blue-100 p-2 rounded"><i class="fa-solid fa-pen"></i></button>
+                                    <button v-if="t.role !== 'admin'" @click="deleteRecord(t.key, 'teachers')" class="text-red-500 hover:bg-red-100 p-2 rounded"><i class="fa-solid fa-trash"></i></button>
+                                </td>
+                            </tr>
+                            <tr v-if="adminData.teachers.length === 0"><td colspan="5" class="p-8 text-center text-gray-500">ไม่มีข้อมูลครู</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <transition name="modal">
+            <div v-if="showFormModal" class="fixed inset-0 bg-black/50 z-50 flex justify-center items-center p-4">
+                <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+                    <div class="p-4 text-white font-bold text-lg" :class="formType === 'student' ? 'bg-purple-600' : 'bg-orange-600'">
+                        {{ isEditing ? 'แก้ไขข้อมูล' : 'เพิ่มข้อมูลใหม่' }}
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <template v-if="formType === 'student'">
+                            <input v-model="formData.id" placeholder="รหัสประจำตัว" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
+                            <input v-model="formData.name" placeholder="ชื่อ - นามสกุล" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
+                            <div class="flex gap-3">
+                                <input v-model="formData.classLevel" placeholder="ชั้น (เช่น 4/1)" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
+                                <input v-model="formData.number" placeholder="เลขที่" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
+                            </div>
+                            <input v-model="formData.parentPassword" placeholder="รหัสผ่านผู้ปกครอง (เริ่มต้น: 1234)" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
+                        </template>
+                        <template v-if="formType === 'teacher'">
+                            <input v-model="formData.username" placeholder="Username สำหรับเข้าระบบ" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
+                            <input v-model="formData.password" placeholder="Password" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
+                            <input v-model="formData.name" placeholder="ชื่อ - นามสกุล ครู" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
+                            <input v-model="formData.classLevel" placeholder="ที่ปรึกษาชั้น (เช่น 4/1)" class="w-full border p-3 rounded-xl focus:ring-2 outline-none">
+                        </template>
+                        <div class="flex gap-3 mt-6">
+                            <button @click="saveRecord" class="flex-1 text-white py-3 rounded-xl font-bold shadow" :class="formType === 'student' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-orange-600 hover:bg-orange-700'">บันทึก</button>
+                            <button @click="showFormModal = false" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 rounded-xl font-bold transition">ยกเลิก</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
+        <transition name="modal">
+            <div v-if="showFaceModal" class="fixed inset-0 bg-black/80 z-50 flex flex-col justify-center items-center p-4">
+                <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
+                    <div class="p-4 bg-blue-600 text-white font-bold flex justify-between items-center">
+                        <span>บันทึกใบหน้า: {{ selectedStudent?.name }}</span>
+                        <button @click="closeFaceScanModal" class="text-white hover:text-gray-200 text-xl"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="p-6 bg-gray-100 flex flex-col items-center">
+                        <div class="w-full max-w-[300px] aspect-[3/4] bg-black rounded-2xl overflow-hidden relative shadow-inner border-4 border-white mb-6">
+                            <video id="adminVideo" autoplay muted playsinline class="w-full h-full object-cover transform scale-x-[-1]"></video>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
+                                <div class="w-[70%] h-[60%] border-2 border-dashed border-blue-400 rounded-[50%] animate-pulse relative shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"></div>
+                            </div>
+                        </div>
+                        <button @click="captureAndSaveFace" class="bg-blue-600 text-white px-8 py-3.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg w-full transition text-lg flex justify-center items-center gap-2">
+                            <i class="fa-solid fa-camera"></i> กดเพื่อสแกนและบันทึก
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </transition>
+
     </div>
-  </div>
+</div>
 
-  <script type="module">
-    // 🌟 ลิงก์ API ของ Google Apps Script 🌟
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw4tSjxsbNFDWB8PzxtxVfBzeAZGilmqdRlb1dxxfXTsoH6ZYIOXIB_YLhJrMKXgdg3/exec"; 
+<script type="module">
+// ================= CONFIGURATION =================
+const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw4tSjxsbNFDWB8PzxtxVfBzeAZGilmqdRlb1dxxfXTsoH6ZYIOXIB_YLhJrMKXgdg3/exec";
 
-    // ✅ นำเข้าไลบรารีของ Realtime Database
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase, ref, push, get, update, query, orderByChild, equalTo, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getDatabase, ref, push, get, update, remove, query, orderByChild, equalTo, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyCcbcchbHCjKwCw0xnNkqE42d7ZvK0g3Fk",
-      authDomain: "scan-708a9.firebaseapp.com",
-      
-      // 🌟 แก้ไขลิงก์โซนสิงคโปร์ (asia-southeast1) 🌟
-      databaseURL: "https://scan-708a9-default-rtdb.asia-southeast1.firebasedatabase.app",
-      
-      projectId: "scan-708a9",
-      storageBucket: "scan-708a9.firebasestorage.app",
-      messagingSenderId: "461577898006",
-      appId: "1:461577898006:web:b4019e156c4eacbe1bcd37",
-      measurementId: "G-7M1YP89VKY"
-    };
+const firebaseConfig = {
+    apiKey: "AIzaSyCcbcchbHCjKwCw0xnNkqE42d7ZvK0g3Fk",
+    authDomain: "scan-708a9.firebaseapp.com",
+    databaseURL: "https://scan-708a9-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "scan-708a9",
+    storageBucket: "scan-708a9.firebasestorage.app",
+    messagingSenderId: "461577898006",
+    appId: "1:461577898006:web:b4019e156c4eacbe1bcd37",
+    measurementId: "G-7M1YP89VKY"
+};
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app); 
-    const { createApp } = Vue;
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const { createApp } = Vue;
 
-    createApp({
-      data() {
+createApp({
+    data() {
         return {
-          currentTab: 'menu',
-          currentUser: null,
-          loginData: { username: '', password: '' },
-          
-          isAiLoading: false,
-          faceMatcher: null,
-          videoStream: null,
-          scanInterval: null,
-          recentScans: [],
-          cooldowns: {}, 
-          
-          telegramChatId: '',
-          myClassStudents: [],
-          newStudent: { id: '', name: '', classLevel: '', number: '' }
+            currentTab: 'menu',
+            currentUser: null,
+            loginData: { username: '', password: '' },
+
+            // Scan System Data
+            isAiLoading: false,
+            faceMatcher: null,
+            videoStream: null,
+            scanInterval: null,
+            recentScans: [],
+            cooldowns: {},
+
+            // Parent Data
+            telegramChatId: '',
+
+            // Teacher Data
+            myClassStudents: [],
+
+            // Admin Data
+            adminSubTab: 'students',
+            adminData: { students: [], teachers: [] },
+            searchQuery: '',
+            
+            // Modal States
+            showFormModal: false,
+            formType: 'student', // 'student' or 'teacher'
+            isEditing: false,
+            formData: {},
+            
+            showFaceModal: false,
+            selectedStudent: null
         }
-      },
-      async mounted() {
+    },
+    computed: {
+        filteredStudents() {
+            if (!this.searchQuery) return this.adminData.students;
+            const q = this.searchQuery.toLowerCase();
+            return this.adminData.students.filter(s => s.name.toLowerCase().includes(q) || s.id.includes(q));
+        }
+    },
+    async mounted() {
         await this.autoSetupDatabase();
-      },
-      watch: {
+    },
+    watch: {
         currentTab(newTab) {
-          this.stopVideo();
-          if (newTab === 'scan') this.startScanSystem('videoInput');
-          if (newTab === 'teacherDashboard' && this.currentUser?.role === 'admin') {
-             this.$nextTick(() => this.startScanSystem('adminVideo', true)); 
-          }
+            this.stopVideo();
+            if (newTab === 'scan') this.startScanSystem('videoInput');
+            if (newTab === 'adminDashboard') this.loadAdminData();
         }
-      },
-      methods: {
+    },
+    methods: {
         async autoSetupDatabase() {
-          try {
-            const adminQuery = query(ref(db, 'teachers'), orderByChild('username'), equalTo('admin'));
-            const snap = await get(adminQuery);
-            if (!snap.exists()) {
-              await push(ref(db, 'teachers'), { 
-                username: "admin", 
-                password: "1234", 
-                name: "ผู้ดูแลระบบ", 
-                role: "admin", 
-                classLevel: "all" 
-              });
-              console.log("Realtime Database Auto-Setup Success");
-            }
-          } catch(e) { 
-            console.error("Firebase Setup Error:", e); 
-            if(e.message.includes("permission_denied")) {
-               Swal.fire('ฐานข้อมูลถูกบล็อก', 'กรุณาตั้งค่า Rules เป็น true ในเมนู Realtime Database ก่อนครับ', 'error');
-            }
-          }
+            try {
+                const adminQuery = query(ref(db, 'teachers'), orderByChild('username'), equalTo('admin'));
+                const snap = await get(adminQuery);
+                if (!snap.exists()) {
+                    await push(ref(db, 'teachers'), { username: "admin", password: "1234", name: "ผู้ดูแลระบบ", role: "admin", classLevel: "all" });
+                }
+            } catch(e) { console.error("Firebase Setup Error:", e); }
         },
-
         goToMenu() {
-          this.stopVideo();
-          this.currentTab = 'menu';
+            this.stopVideo();
+            this.currentTab = 'menu';
+            this.currentUser = null;
+            this.loginData = { username: '', password: '' };
         },
+        logout() { this.goToMenu(); },
 
+        // ================= AI & SCANNER LOGIC =================
         async startScanSystem(videoId, isRegistration = false) {
-          this.isAiLoading = true;
-          try {
-            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
-            await Promise.all([
-              faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-              faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-              faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
-            ]);
-
-            if (!isRegistration) {
-              const snap = await get(ref(db, 'students'));
-              const labeledDescriptors = [];
-              if (snap.exists()) {
-                const studentsData = snap.val();
-                Object.keys(studentsData).forEach(key => {
-                  const data = studentsData[key];
-                  if(data.descriptor) {
-                    const desc = new Float32Array(JSON.parse(data.descriptor));
-                    labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(data.id, [desc]));
-                  }
-                });
-              }
-              if(labeledDescriptors.length > 0) this.faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
-            }
-            await this.startVideo(videoId, isRegistration);
-          } catch(e) { Swal.fire('ข้อผิดพลาด', 'โหลด AI ไม่สำเร็จ โปรดตรวจสอบอินเทอร์เน็ต', 'error'); }
-          this.isAiLoading = false;
+            this.isAiLoading = true;
+            try {
+                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+                ]);
+                
+                if (!isRegistration) {
+                    const snap = await get(ref(db, 'students'));
+                    const labeledDescriptors = [];
+                    if (snap.exists()) {
+                        snap.forEach(child => {
+                            const data = child.val();
+                            if(data.descriptor) {
+                                const desc = new Float32Array(JSON.parse(data.descriptor));
+                                labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(data.id, [desc]));
+                            }
+                        });
+                    }
+                    if(labeledDescriptors.length > 0) this.faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
+                }
+                await this.startVideo(videoId, isRegistration);
+            } catch(e) { Swal.fire('ข้อผิดพลาด', 'โหลด AI ไม่สำเร็จ โปรดตรวจสอบอินเทอร์เน็ต', 'error'); }
+            this.isAiLoading = false;
         },
-
         async startVideo(videoId, isRegistration = false) {
-          const video = document.getElementById(videoId);
-          if(!video) return;
-          try {
-            this.videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-            video.srcObject = this.videoStream;
-            
-            if(!isRegistration) {
-              video.addEventListener('play', () => {
-                const canvas = document.getElementById('overlay');
-                const displaySize = { width: video.clientWidth, height: video.clientHeight };
-                faceapi.matchDimensions(canvas, displaySize);
+            const video = document.getElementById(videoId);
+            if(!video) return;
+            try {
+                this.videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+                video.srcObject = this.videoStream;
 
-                this.scanInterval = setInterval(async () => {
-                  if(this.currentTab !== 'scan') return;
-                  const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks().withFaceDescriptors();
-                  const resizedDetections = faceapi.resizeResults(detections, displaySize);
-                  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-                  
-                  if (resizedDetections.length > 0 && this.faceMatcher) {
-                    resizedDetections.forEach(det => {
-                      const bestMatch = this.faceMatcher.findBestMatch(det.descriptor);
-                      if (bestMatch.label !== 'unknown') this.processAttendance(bestMatch.label);
+                if(!isRegistration) {
+                    video.addEventListener('play', () => {
+                        const canvas = document.getElementById('overlay');
+                        const displaySize = { width: video.clientWidth, height: video.clientHeight };
+                        faceapi.matchDimensions(canvas, displaySize);
+                        this.scanInterval = setInterval(async () => {
+                            if(this.currentTab !== 'scan') return;
+                            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks().withFaceDescriptors();
+                            const resizedDetections = faceapi.resizeResults(detections, displaySize);
+                            canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+
+                            if (resizedDetections.length > 0 && this.faceMatcher) {
+                                resizedDetections.forEach(det => {
+                                    const bestMatch = this.faceMatcher.findBestMatch(det.descriptor);
+                                    if (bestMatch.label !== 'unknown') this.processAttendance(bestMatch.label);
+                                });
+                            }
+                        }, 400);
                     });
-                  }
-                }, 300);
-              });
-            }
-          } catch(err) { Swal.fire('ถูกบล็อกสิทธิ์', 'เบราว์เซอร์ไม่อนุญาตให้ใช้กล้อง', 'error'); }
+                }
+            } catch(err) { Swal.fire('ถูกบล็อกสิทธิ์', 'กรุณาอนุญาตการเข้าถึงกล้องถ่ายรูป', 'error'); }
         },
-
         stopVideo() {
-          if(this.videoStream) { this.videoStream.getTracks().forEach(t => t.stop()); this.videoStream = null; }
-          if(this.scanInterval) clearInterval(this.scanInterval);
+            if(this.videoStream) { this.videoStream.getTracks().forEach(t => t.stop()); this.videoStream = null; }
+            if(this.scanInterval) clearInterval(this.scanInterval);
         },
-
         async processAttendance(studentId) {
-          const now = Date.now();
-          if (this.cooldowns[studentId] && (now - this.cooldowns[studentId] < 60000)) return;
-          this.cooldowns[studentId] = now;
-          try {
-            const studentQuery = query(ref(db, 'students'), orderByChild('id'), equalTo(studentId));
-            const snap = await get(studentQuery);
-            if (!snap.exists()) return;
+            const now = Date.now();
+            if (this.cooldowns[studentId] && (now - this.cooldowns[studentId] < 60000)) return; // 1 min cooldown
+            this.cooldowns[studentId] = now;
+            try {
+                const q = query(ref(db, 'students'), orderByChild('id'), equalTo(studentId));
+                const snap = await get(q);
+                if (!snap.exists()) return;
+                let studentData;
+                snap.forEach(child => { studentData = child.val(); });
 
-            let studentData;
-            snap.forEach(child => { studentData = child.val(); });
-            
-            const timeStr = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
-            const dateStr = new Date().toISOString().split('T')[0];
-            const status = timeStr > "08:30" ? "มาสาย" : "มาปกติ";
-            
-            // บันทึกลง Firebase
-            await push(ref(db, 'attendance'), {
-              studentId, name: studentData.name, classLevel: studentData.classLevel,
-              date: dateStr, time: timeStr, status, timestamp: serverTimestamp()
-            });
+                const timeStr = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
+                const dateStr = new Date().toISOString().split('T')[0];
+                const status = timeStr > "08:30" ? "มาสาย" : "มาปกติ";
 
-            this.recentScans.unshift({ id: Date.now(), name: studentData.name, time: timeStr, status });
+                await push(ref(db, 'attendance'), {
+                    studentId, name: studentData.name, classLevel: studentData.classLevel,
+                    date: dateStr, time: timeStr, status, timestamp: serverTimestamp()
+                });
+                
+                this.recentScans.unshift({ id: Date.now(), name: studentData.name, time: timeStr, status });
+                if(this.recentScans.length > 10) this.recentScans.pop();
 
-            // 🌟 ส่ง Telegram (ตรวจสอบ ID ให้แน่ใจว่าไม่ว่าง)
-            if(studentData.telegramChatId && studentData.telegramChatId !== "") {
-              fetch(GAS_API_URL, {
-                redirect: "follow",
-                method: 'POST',
-                headers: { "Content-Type": "text/plain;charset=utf-8" },
-                body: JSON.stringify({
-                  action: "telegram",
-                  chatId: studentData.telegramChatId,
-                  message: `🔔 <b>แจ้งเตือนการเข้าเรียน</b>\nนักเรียน: ${studentData.name}\nเวลา: ${timeStr} น.\nสถานะ: ${status}`
-                })
-              })
-              .then(res => res.json())
-              .catch(e => console.error("Telegram Error: ", e));
-            }
-          } catch(e) { console.error(e); }
+                // Telegram Notification
+                if(studentData.telegramChatId) {
+                    fetch(GAS_API_URL, {
+                        method: 'POST', body: JSON.stringify({
+                            action: "telegram", chatId: studentData.telegramChatId,
+                            message: `🔔 <b>แจ้งเตือนการเข้าเรียน</b>\nนร.: ${studentData.name}\nเวลา: ${timeStr} น.\nสถานะ: ${status}`
+                        })
+                    }).catch(e => console.error(e));
+                }
+            } catch(e) { console.error(e); }
         },
 
-        async handleLogin(role) {
-          if(!this.loginData.username || !this.loginData.password) return Swal.fire('แจ้งเตือน', 'กรุณากรอกข้อมูล', 'warning');
-          Swal.fire({ title: 'ตรวจสอบ...', didOpen: () => Swal.showLoading() });
-          try {
-            if (role === 'parent') {
-              const q = query(ref(db, 'students'), orderByChild('id'), equalTo(this.loginData.username));
-              const snap = await get(q);
-              if (snap.exists()) {
-                let found = false;
-                snap.forEach(child => {
-                   const data = child.val();
-                   if(data.parentPassword === this.loginData.password) {
-                      this.currentUser = { role: 'parent', docId: child.key, name: data.name, studentData: data };
-                      this.telegramChatId = data.telegramChatId || '';
-                      this.currentTab = 'parentDashboard';
-                      found = true;
-                   }
-                });
-                if(found) Swal.close(); else Swal.fire('ผิดพลาด', 'รหัสผ่านไม่ถูกต้อง', 'error');
-              } else Swal.fire('ผิดพลาด', 'ไม่พบรหัสนักเรียน', 'error');
-
-            } else if (role === 'teacher') {
-              const q = query(ref(db, 'teachers'), orderByChild('username'), equalTo(this.loginData.username));
-              const snap = await get(q);
-              if (snap.exists()) {
-                let found = false;
-                snap.forEach(child => {
-                   const data = child.val();
-                   if(data.password === this.loginData.password) {
-                      this.currentUser = { role: data.role, name: data.name, classLevel: data.classLevel };
-                      this.currentTab = 'teacherDashboard';
-                      this.loadTeacherClass();
-                      found = true;
-                   }
-                });
-                if(found) Swal.close(); else Swal.fire('ผิดพลาด', 'รหัสผ่านไม่ถูกต้อง', 'error');
-              } else Swal.fire('ผิดพลาด', 'ไม่พบชื่อผู้ใช้', 'error');
-            }
-          } catch(e) { Swal.fire('Error', e.message, 'error'); }
+        // ================= AUTHENTICATION =================
+        async handleLogin(type) {
+            if(!this.loginData.username || !this.loginData.password) return Swal.fire('แจ้งเตือน', 'กรุณากรอกข้อมูล', 'warning');
+            Swal.fire({ title: 'ตรวจสอบ...', didOpen: () => Swal.showLoading() });
+            try {
+                if (type === 'parent') {
+                    const q = query(ref(db, 'students'), orderByChild('id'), equalTo(this.loginData.username));
+                    const snap = await get(q);
+                    if (snap.exists()) {
+                        let found = false;
+                        snap.forEach(child => {
+                            if(child.val().parentPassword === this.loginData.password) {
+                                this.currentUser = { role: 'ผู้ปกครอง', docId: child.key, name: child.val().name, studentData: child.val() };
+                                this.telegramChatId = child.val().telegramChatId || '';
+                                this.currentTab = 'parentDashboard';
+                                found = true;
+                            }
+                        });
+                        if(found) Swal.close(); else throw new Error('รหัสผ่านไม่ถูกต้อง');
+                    } else throw new Error('ไม่พบรหัสนักเรียน');
+                } 
+                else if (type === 'teacher' || type === 'admin') {
+                    const q = query(ref(db, 'teachers'), orderByChild('username'), equalTo(this.loginData.username));
+                    const snap = await get(q);
+                    if (snap.exists()) {
+                        let found = false;
+                        snap.forEach(child => {
+                            const data = child.val();
+                            if(data.password === this.loginData.password) {
+                                if(type === 'admin' && data.role !== 'admin') throw new Error('ไม่มีสิทธิ์เข้าถึงระบบผู้ดูแล');
+                                if(type === 'teacher' && data.role === 'admin') throw new Error('กรุณาเข้าสู่ระบบผ่านเมนูผู้ดูแลระบบ');
+                                
+                                this.currentUser = { role: data.role === 'admin' ? 'ผู้ดูแลระบบ' : 'ครูที่ปรึกษา', name: data.name, classLevel: data.classLevel };
+                                this.currentTab = type === 'admin' ? 'adminDashboard' : 'teacherDashboard';
+                                if(type === 'teacher') this.loadTeacherClass();
+                                found = true;
+                            }
+                        });
+                        if(found) Swal.close(); else throw new Error('รหัสผ่านไม่ถูกต้อง');
+                    } else throw new Error('ไม่พบชื่อผู้ใช้งาน');
+                }
+            } catch(e) { Swal.fire('ผิดพลาด', e.message, 'error'); }
         },
 
+        // ================= PARENT LOGIC =================
         async updateTelegram() {
-          if(!this.telegramChatId) return;
-          await update(ref(db, 'students/' + this.currentUser.docId), { telegramChatId: this.telegramChatId });
-          Swal.fire('สำเร็จ', 'บันทึก Telegram แล้ว', 'success');
+            if(!this.telegramChatId) return;
+            await update(ref(db, 'students/' + this.currentUser.docId), { telegramChatId: this.telegramChatId });
+            Swal.fire('สำเร็จ', 'บันทึกการตั้งค่า Telegram แล้ว', 'success');
         },
 
+        // ================= TEACHER LOGIC =================
         async loadTeacherClass() {
-          const snap = await get(ref(db, 'students'));
-          if(!snap.exists()) { this.myClassStudents = []; return; }
-          
-          let students = [];
-          const todayStr = new Date().toISOString().split('T')[0];
-          
-          snap.forEach(child => {
-             const sData = child.val();
-             if(this.currentUser.role === 'admin' || sData.classLevel === this.currentUser.classLevel) {
-                 students.push(sData);
-             }
-          });
+            const snap = await get(ref(db, 'students'));
+            if(!snap.exists()) { this.myClassStudents = []; return; }
+            let students = [];
+            const todayStr = new Date().toISOString().split('T')[0];
 
-          const attSnap = await get(ref(db, 'attendance'));
-          if (attSnap.exists()) {
-             const attData = [];
-             attSnap.forEach(c => {
-                 if(c.val().date === todayStr) attData.push(c.val());
-             });
-             
-             students = students.map(s => {
-                 const record = attData.find(a => a.studentId === s.id);
-                 s.todayStatus = record ? record.status : null;
-                 return s;
-             });
-          }
-          
-          this.myClassStudents = students.sort((a,b) => parseInt(a.number) - parseInt(b.number));
+            snap.forEach(child => {
+                if(child.val().classLevel === this.currentUser.classLevel) students.push(child.val());
+            });
+
+            const attSnap = await get(ref(db, 'attendance'));
+            if (attSnap.exists()) {
+                const attData = [];
+                attSnap.forEach(c => { if(c.val().date === todayStr) attData.push(c.val()); });
+                students = students.map(s => {
+                    const record = attData.find(a => a.studentId === s.id);
+                    s.todayStatus = record ? record.status : null;
+                    return s;
+                });
+            }
+            this.myClassStudents = students.sort((a,b) => parseInt(a.number) - parseInt(b.number));
         },
-
         async markStatus(student, status) {
-          const todayStr = new Date().toISOString().split('T')[0];
-          await push(ref(db, 'attendance'), { 
-              studentId: student.id, name: student.name, classLevel: student.classLevel, 
-              date: todayStr, time: "-", status: status, timestamp: serverTimestamp() 
-          });
-          student.todayStatus = status;
-          Swal.fire({ toast:true, position:'top-end', icon:'success', title: `บันทึก ${status}`, showConfirmButton:false, timer:2000 });
-        },
-
-        async captureAndRegister() {
-          if(!this.newStudent.id || !this.newStudent.name || !this.newStudent.classLevel) {
-             return Swal.fire('เตือน', 'กรอกข้อมูลให้ครบ', 'warning');
-          }
-
-          try {
-            const video = document.getElementById('adminVideo');
-
-            Swal.fire({ title: '1/3: กำลังจับภาพใบหน้า...', text: 'กรุณามองกล้องนิ่งๆ', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-            const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
-
-            if(!detections) {
-                return Swal.fire('ไม่พบใบหน้า', 'มองกล้องให้ชัดเจนและอยู่ในกรอบ', 'error');
-            }
-
-            Swal.fire({ title: '2/3: กำลังอัปโหลดรูปลงระบบ...', text: 'อาจใช้เวลา 3-5 วินาที', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-
-            const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 300; 
-            const scale = MAX_WIDTH / video.videoWidth;
-            canvas.width = MAX_WIDTH;
-            canvas.height = video.videoHeight * scale;
-            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imageBase64 = canvas.toDataURL('image/jpeg', 0.6); 
-            const descriptorJson = JSON.stringify(Array.from(detections.descriptor));
-
-            const response = await fetch(GAS_API_URL, {
-              method: 'POST',
-              body: JSON.stringify({ action: 'uploadImage', base64: imageBase64, fileName: this.newStudent.id + "_" + this.newStudent.name })
+            const todayStr = new Date().toISOString().split('T')[0];
+            await push(ref(db, 'attendance'), {
+                studentId: student.id, name: student.name, classLevel: student.classLevel,
+                date: todayStr, time: "-", status: status, timestamp: serverTimestamp()
             });
-
-            const res = await response.json();
-            if(!res.success) throw new Error(res.error || res.message || "อัปโหลดรูปลง Drive ล้มเหลว");
-
-            Swal.fire({ title: '3/3: กำลังบันทึกข้อมูลเข้าฐานข้อมูล...', text: 'รอสักครู่...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-
-            // บันทึกเข้า Realtime Database
-            await push(ref(db, 'students'), {
-              id: this.newStudent.id,
-              name: this.newStudent.name,
-              classLevel: this.newStudent.classLevel,
-              number: this.newStudent.number,
-              parentPassword: "1234",
-              descriptor: descriptorJson,
-              imageUrl: res.url,
-              telegramChatId: this.newStudent.telegramChatId || "" // 🌟 ไม่ทับค่าเดิมด้วยค่าว่าง
-            });
-
-            Swal.fire('สำเร็จ', 'บันทึกข้อมูลและใบหน้าเรียบร้อย', 'success');
-            this.newStudent = { id: '', name: '', classLevel: '', number: '' };
-            this.loadTeacherClass();
-
-          } catch(e) {
-            console.error(e);
-            if(e.message.includes("permission_denied")) {
-              Swal.fire('ฐานข้อมูลถูกบล็อก', 'คุณยังไม่ได้เปิดสิทธิ์ Rules ในเมนู Realtime Database ครับ', 'error');
-            } else {
-              Swal.fire('เกิดข้อผิดพลาด', e.message, 'error');
-            }
-          }
+            student.todayStatus = status;
+            Swal.fire({ toast:true, position:'top-end', icon:'success', title: `บันทึก ${status} สำเร็จ`, showConfirmButton:false, timer:1500 });
         },
-
         getStatusColor(status) {
-          if(status === 'มาปกติ') return 'text-green-600';
-          if(status === 'มาสาย') return 'text-orange-500';
-          if(status === 'ลา') return 'text-yellow-600';
-          if(status === 'ขาด') return 'text-red-600';
-          return 'text-gray-400';
+            if(status === 'มาปกติ') return 'text-green-600';
+            if(status === 'มาสาย') return 'text-orange-500';
+            if(status === 'ลา') return 'text-yellow-600';
+            if(status === 'ขาด') return 'text-red-600';
+            return 'text-gray-400';
         },
-        logout() { this.currentUser = null; this.loginData = { username: '', password: '' }; this.goToMenu(); }
-      }
-    }).mount('#app');
-  </script>
+
+        // ================= ADMIN LOGIC (CRUD & EXCEL) =================
+        async loadAdminData() {
+            // Load Students
+            onSnapshot(ref(db, 'students'), (snap) => {
+                const arr = [];
+                if(snap.exists()) snap.forEach(c => arr.push({ key: c.key, ...c.val() }));
+                this.adminData.students = arr.sort((a,b) => a.classLevel.localeCompare(b.classLevel) || parseInt(a.number) - parseInt(b.number));
+            });
+            // Load Teachers
+            onSnapshot(ref(db, 'teachers'), (snap) => {
+                const arr = [];
+                if(snap.exists()) snap.forEach(c => arr.push({ key: c.key, ...c.val() }));
+                this.adminData.teachers = arr;
+            });
+        },
+        openModal(type) {
+            this.formType = type;
+            this.isEditing = false;
+            this.formData = type === 'student' ? { id:'', name:'', classLevel:'', number:'', parentPassword:'1234' } : { username:'', password:'', name:'', classLevel:'', role:'teacher' };
+            this.showFormModal = true;
+        },
+        editRecord(item, type) {
+            this.formType = type;
+            this.isEditing = true;
+            this.formData = { ...item };
+            this.showFormModal = true;
+        },
+        async saveRecord() {
+            const path = this.formType === 'student' ? 'students' : 'teachers';
+            try {
+                if(this.isEditing) {
+                    const key = this.formData.key;
+                    delete this.formData.key;
+                    await update(ref(db, `${path}/${key}`), this.formData);
+                } else {
+                    await push(ref(db, path), this.formData);
+                }
+                this.showFormModal = false;
+                Swal.fire({ toast:true, position:'top-end', icon:'success', title: 'บันทึกข้อมูลเรียบร้อย', showConfirmButton:false, timer:1500 });
+            } catch(e) { Swal.fire('Error', e.message, 'error'); }
+        },
+        async deleteRecord(key, path) {
+            if(await Swal.fire({ title: 'ยืนยันการลบ?', icon: 'warning', showCancelButton: true }).then(r => !r.isConfirmed)) return;
+            await remove(ref(db, `${path}/${key}`));
+            Swal.fire({ toast:true, position:'top-end', icon:'success', title: 'ลบข้อมูลสำเร็จ', showConfirmButton:false, timer:1500 });
+        },
+
+        // EXCEL EXPORT
+        downloadTemplate(type) {
+            let data, filename;
+            if(type === 'student') {
+                data = [{"รหัส": "10001", "ชื่อ-นามสกุล": "เด็กชาย เรียนดี", "ชั้น": "1/1", "เลขที่": "1"}];
+                filename = "แบบฟอร์มนำเข้านักเรียน.xlsx";
+            } else {
+                data = [{"Username": "t01", "Password": "password", "ชื่อ-นามสกุล": "ครูใจดี มากมาย", "ชั้นที่ปรึกษา": "1/1"}];
+                filename = "แบบฟอร์มนำเข้าครู.xlsx";
+            }
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+            XLSX.writeFile(wb, filename);
+        },
+        // EXCEL IMPORT
+        importExcel(event, type) {
+            const file = event.target.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    
+                    Swal.fire({ title: 'กำลังนำเข้าข้อมูล...', didOpen: () => Swal.showLoading() });
+                    const path = type === 'student' ? 'students' : 'teachers';
+                    
+                    for(const row of jsonData) {
+                        if(type === 'student' && row['รหัส']) {
+                            await push(ref(db, path), {
+                                id: String(row['รหัส']), name: row['ชื่อ-นามสกุล'], classLevel: String(row['ชั้น']), number: String(row['เลขที่']), parentPassword: "1234", telegramChatId: ""
+                            });
+                        } else if(type === 'teacher' && row['Username']) {
+                            await push(ref(db, path), {
+                                username: String(row['Username']), password: String(row['Password']), name: row['ชื่อ-นามสกุล'], classLevel: String(row['ชั้นที่ปรึกษา']), role: "teacher"
+                            });
+                        }
+                    }
+                    Swal.fire('สำเร็จ', `นำเข้าข้อมูล ${jsonData.length} รายการเรียบร้อย`, 'success');
+                } catch(err) { Swal.fire('ผิดพลาด', 'รูปแบบไฟล์ไม่ถูกต้อง', 'error'); }
+                event.target.value = null; // reset input
+            };
+            reader.readAsArrayBuffer(file);
+        },
+
+        // ADMIN FACE SCAN UPDATE
+        openFaceScanModal(student) {
+            this.selectedStudent = student;
+            this.showFaceModal = true;
+            this.$nextTick(() => this.startScanSystem('adminVideo', true));
+        },
+        closeFaceScanModal() {
+            this.stopVideo();
+            this.showFaceModal = false;
+        },
+        async captureAndSaveFace() {
+            try {
+                const video = document.getElementById('adminVideo');
+                Swal.fire({ title: '1/3: กำลังจับภาพใบหน้า...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+                
+                if(!detections) return Swal.fire('ไม่พบใบหน้า', 'กรุณามองกล้องให้ชัดเจน', 'error');
+                
+                Swal.fire({ title: '2/3: กำลังอัปโหลดรูปภาพ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const canvas = document.createElement('canvas');
+                const scale = 300 / video.videoWidth;
+                canvas.width = 300; canvas.height = video.videoHeight * scale;
+                canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageBase64 = canvas.toDataURL('image/jpeg', 0.6);
+                const descriptorJson = JSON.stringify(Array.from(detections.descriptor));
+
+                const response = await fetch(GAS_API_URL, {
+                    method: 'POST', body: JSON.stringify({ action: 'uploadImage', base64: imageBase64, fileName: this.selectedStudent.id + "_" + this.selectedStudent.name })
+                });
+                const res = await response.json();
+                if(!res.success) throw new Error("อัปโหลดรูปลง Drive ล้มเหลว");
+
+                Swal.fire({ title: '3/3: กำลังอัปเดตฐานข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                await update(ref(db, `students/${this.selectedStudent.key}`), { descriptor: descriptorJson, imageUrl: res.url });
+                
+                Swal.fire('สำเร็จ', 'บันทึกข้อมูลใบหน้าเรียบร้อย', 'success');
+                this.closeFaceScanModal();
+            } catch(e) { Swal.fire('เกิดข้อผิดพลาด', e.message, 'error'); }
+        }
+    }
+});
+
+// Helper for real-time list
+import { onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+function onSnapshot(refObj, callback) { return onValue(refObj, callback); }
+
+createApp.mount('#app');
+</script>
 </body>
 </html>
