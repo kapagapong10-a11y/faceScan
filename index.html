@@ -394,14 +394,18 @@
             const msg = `🔔 <b>แจ้งเตือนการเข้าเรียน</b>\nนักเรียน: ${studentData.name}\nเวลา: ${timeStr} น.\nสถานะ: ${status}`;
             
             fetch(GAS_API_URL, {
-              redirect: "follow",
-              method: 'POST',
-              headers: { "Content-Type": "text/plain;charset=utf-8" },
-              body: JSON.stringify({ action: "telegram", chatId: studentData.telegramChatId, message: msg })
-            })
-            .then(res => res.json())
-            .then(data => console.log("Telegram Sent: ", data))
-            .catch(e => console.error("Telegram Error: ", e));
+  redirect: "follow",
+  method: 'POST',
+  headers: { "Content-Type": "text/plain;charset=utf-8" }, // ใช้ text/plain เพื่อเลี่ยงปัญหา CORS [cite: 362]
+  body: JSON.stringify({ 
+    action: "telegram", 
+    chatId: studentData.telegramChatId, 
+    message: msg 
+  })
+})
+.then(res => res.json())
+.then(data => console.log("Telegram Sent: ", data))
+.catch(e => console.error("Telegram Error: ", e));
           }
             }
           } catch(e) { console.error(e); }
