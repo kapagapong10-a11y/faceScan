@@ -27,7 +27,8 @@
         
         .camera-container { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 1rem; background: #000; min-height: 400px; }
         video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-        canvas.overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); pointer-events: none; }
+        /* นำ transform: scaleX(-1) ออกจาก canvas เพื่อไม่ให้ตัวหนังสือกลับด้านเวลาวาดชื่อ */
+        canvas.overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
         
         .modal-enter-active, .modal-leave-active { transition: opacity 0.3s ease; }
         .modal-enter-from, .modal-leave-to { opacity: 0; }
@@ -90,17 +91,17 @@
                         <video id="videoInput" autoplay muted playsinline></video>
                         <canvas id="overlay" class="overlay"></canvas>
                         
-                        <div v-if="!isAiLoading" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-                            <div class="w-48 h-64 sm:w-64 sm:h-80 border-2 border-dashed border-green-400 rounded-[50px] relative animate-[pulse_2s_ease-in-out_infinite] mb-6 shadow-[0_0_0_9999px_rgba(0,0,0,0.3)]">
-                                <div class="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-green-500 rounded-tl-[40px]"></div>
-                                <div class="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-green-500 rounded-tr-[40px]"></div>
-                                <div class="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-green-500 rounded-bl-[40px]"></div>
-                                <div class="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-green-500 rounded-br-[40px]"></div>
-                            </div>
-                            <div class="bg-black/70 text-white px-6 py-3 rounded-full text-lg font-bold backdrop-blur-md shadow-lg border border-white/20">
-                                <i class="fa-solid fa-expand"></i> กรุณาวางใบหน้าให้อยู่ในกรอบ
+                        <!-- เปลี่ยนจากกรอบตายตัวเป็นสถานะ Live Tracking -->
+                        <div v-if="!isAiLoading" class="absolute top-4 left-4 z-10">
+                            <div class="bg-black/70 text-green-400 px-4 py-2 rounded-full text-sm font-bold backdrop-blur-md shadow-lg border border-green-500/50 flex items-center gap-2">
+                                <span class="relative flex h-3 w-3">
+                                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                  <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                                </span>
+                                ระบบติดตามใบหน้าอัตโนมัติ (Live Tracking)
                             </div>
                         </div>
+
                         <div v-if="isAiLoading" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-white z-20">
                             <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500 mb-4"></div>
                             <p class="text-xl font-bold animate-pulse">กำลังโหลดระบบ AI กรุณารอสักครู่...</p>
@@ -627,7 +628,8 @@ const myApp = createApp({
             isAiLoading: false,
             faceMatcher: null,
             videoStream: null,
-            scanInterval: null,
+            isScanning: false, // เพิ่มตัวแปรเช็คสถานะการทำงานของลูปวิดีโอ
+            studentMap: {}, // แผนที่เก็บรหัส -> ชื่อ สำหรับแสดงบนหน้าจอ
             recentScans: [],
             cooldowns: {},
 
@@ -733,12 +735,15 @@ const myApp = createApp({
                 if (!isRegistration) {
                     const snap = await get(ref(db, 'students'));
                     const labeledDescriptors = [];
+                    this.studentMap = {}; // ล้างข้อมูลเก่า
+                    
                     if (snap.exists()) {
                         snap.forEach(child => {
                             const data = child.val();
                             if(data.descriptor) {
                                 const desc = new Float32Array(JSON.parse(data.descriptor));
                                 labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(data.id, [desc]));
+                                this.studentMap[data.id] = data.name; // เก็บชื่อไว้แสดงผล
                             }
                         });
                     }
@@ -756,30 +761,72 @@ const myApp = createApp({
                 video.srcObject = this.videoStream;
 
                 if(!isRegistration) {
+                    this.isScanning = true;
                     video.addEventListener('play', () => {
                         const canvas = document.getElementById('overlay');
-                        const displaySize = { width: video.clientWidth, height: video.clientHeight };
-                        faceapi.matchDimensions(canvas, displaySize);
-                        this.scanInterval = setInterval(async () => {
-                            if(this.currentTab !== 'scan') return;
-                            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks().withFaceDescriptors();
-                            const resizedDetections = faceapi.resizeResults(detections, displaySize);
-                            canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                        
+                        // ฟังก์ชันลูปประมวลผลแบบ Real-time
+                        const processVideo = async () => {
+                            if (!this.isScanning || this.currentTab !== 'scan') return;
+                            
+                            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                                const displaySize = { width: video.clientWidth, height: video.clientHeight };
+                                faceapi.matchDimensions(canvas, displaySize);
+                                
+                                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224 })).withFaceLandmarks().withFaceDescriptors();
+                                const resizedDetections = faceapi.resizeResults(detections, displaySize);
+                                
+                                const ctx = canvas.getContext('2d');
+                                ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                            if (resizedDetections.length > 0 && this.faceMatcher) {
-                                resizedDetections.forEach(det => {
-                                    const bestMatch = this.faceMatcher.findBestMatch(det.descriptor);
-                                    if (bestMatch.label !== 'unknown') this.processAttendance(bestMatch.label);
-                                });
+                                if (resizedDetections.length > 0 && this.faceMatcher) {
+                                    resizedDetections.forEach(det => {
+                                        const bestMatch = this.faceMatcher.findBestMatch(det.descriptor);
+                                        const box = det.detection.box;
+                                        
+                                        const isKnown = bestMatch.label !== 'unknown';
+                                        const text = isKnown ? (this.studentMap[bestMatch.label] || bestMatch.label) : 'ไม่รู้จัก';
+                                        const color = isKnown ? '#22c55e' : '#ef4444'; // เขียว = รู้จัก, แดง = ไม่รู้จัก
+
+                                        // เนื่องจากวิดีโอถูกกลับซ้ายขวาด้วย CSS เราต้องกลับพิกัด X บน Canvas ให้ตรงกัน
+                                        const mirrorX = canvas.width - box.x - box.width;
+
+                                        // 1. วาดกรอบใบหน้า (Bounding Box)
+                                        ctx.strokeStyle = color;
+                                        ctx.lineWidth = 3;
+                                        ctx.strokeRect(mirrorX, box.y, box.width, box.height);
+
+                                        // 2. วาดพื้นหลังป้ายชื่อ
+                                        ctx.fillStyle = color;
+                                        ctx.font = 'bold 16px Sarabun';
+                                        const textWidth = ctx.measureText(text).width;
+                                        // วาดพื้นหลังให้พอดีกับความยาวชื่อ
+                                        ctx.fillRect(mirrorX, box.y - 30, textWidth + 16, 30);
+
+                                        // 3. เขียนข้อความชื่อนักเรียน
+                                        ctx.fillStyle = '#ffffff';
+                                        ctx.fillText(text, mirrorX + 8, box.y - 10);
+
+                                        // บันทึกการมาเรียนถ้าระบบรู้จัก
+                                        if (isKnown) {
+                                            this.processAttendance(bestMatch.label);
+                                        }
+                                    });
+                                }
                             }
-                        }, 400);
+                            // ใช้ requestAnimationFrame เพื่อให้การวาดลื่นไหล ไม่กระตุก
+                            if (this.isScanning) requestAnimationFrame(processVideo);
+                        };
+                        
+                        // เริ่มต้นการทำงานของลูป
+                        processVideo();
                     });
                 }
             } catch(err) { Swal.fire('ถูกบล็อกสิทธิ์', 'กรุณาอนุญาตการเข้าถึงกล้องถ่ายรูป', 'error'); }
         },
         stopVideo() {
+            this.isScanning = false; // สั่งหยุดลูปประมวลผล
             if(this.videoStream) { this.videoStream.getTracks().forEach(t => t.stop()); this.videoStream = null; }
-            if(this.scanInterval) clearInterval(this.scanInterval);
         },
         async processAttendance(studentId) {
             const now = Date.now();
