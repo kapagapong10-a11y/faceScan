@@ -909,7 +909,7 @@ const myApp = createApp({
                         method: 'POST', redirect: 'follow', headers: { "Content-Type": "text/plain;charset=utf-8" },
                         body: JSON.stringify({
                             action: "telegram", chatId: studentData.telegramChatId,
-                            message: `🔔 <b>แจ้งเตือนการเข้าเรียน</b>\nนร.: ${studentData.name}\nเวลา: ${timeStr} น.\nสถานะ: ${status}`
+                            message: ` 🔔  <b>แจ้งเตือนการเข้าเรียน</b>\nนร.: ${studentData.name}\nเวลา: ${timeStr} น.\nสถานะ: ${status}\n\n🌐 <b>ตรวจสอบข้อมูลการเข้าเรียน:</b>\nhttps://kapagapong10-a11y.github.io/faceScan/`
                         })
                     }).catch(e => console.error(e));
                 }
@@ -1013,7 +1013,16 @@ const myApp = createApp({
                 this.currentUser.studentData.telegramChatId = this.parentSettingsForm.telegramChatId;
                 
                 this.showParentSettings = false;
-                Swal.fire('สำเร็จ', 'บันทึกการตั้งค่าเรียบร้อยแล้ว', 'success');
+                Swal.fire({
+                  title: 'สำเร็จ',
+                  text: 'บันทึกการตั้งค่าเรียบร้อย ระบบกำลังพาไปยัง Telegram...',
+                  icon: 'success',
+                  timer: 2000,
+                  showConfirmButton: false
+                }).then(() => {
+                  // เปิดหน้า Telegram แชทในแท็บใหม่
+                  window.open('https://web.telegram.org/a/#8670359425', '_blank');
+                });
             } catch(e) { Swal.fire('Error', e.message, 'error'); }
         },
 
