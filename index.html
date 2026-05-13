@@ -1337,12 +1337,32 @@ const myApp = createApp({
                 const imageBase64 = canvas.toDataURL('image/jpeg', 0.6);
                 const descriptorJson = JSON.stringify(Array.from(detections.descriptor));
 
-                const response = await fetch(GAS_API_URL, {
-                    method: 'POST', redirect: 'follow', headers: { "Content-Type": "text/plain;charset=utf-8" },
-                    body: JSON.stringify({ action: 'uploadImage', base64: imageBase64, fileName: this.selectedStudent.id + "_" + this.selectedStudent.name })
+                // ปรับรูปแบบการส่ง Request แบบ Simple Request เพื่อเลี่ยง Preflight CORS Error
+                const payload = JSON.stringify({ 
+                    action: 'uploadImage', 
+                    base64: imageBase64, 
+                    fileName: this.selectedStudent.id + "_" + this.selectedStudent.name 
                 });
-                const res = await response.json();
-                if(!res.success) throw new Error("อัปโหลดรูปลง Drive ล้มเหลว");
+                
+                const response = await fetch(GAS_API_URL, {
+                    method: 'POST',
+                    // ลบ headers ออกทั้งหมด เพื่อบังคับให้บราวเซอร์ส่งเป็น text/plain อัตโนมัติ (ผ่าน CORS ง่ายที่สุดสำหรับ GAS)
+                    body: payload
+                });
+                
+                // ดักจับ Error กรณี GAS ตอบกลับมาเป็นหน้าเว็บ Error ของ Google แทนที่จะเป็น JSON
+                const responseText = await response.text();
+                let res;
+                try {
+                    res = JSON.parse(responseText);
+                } catch (err) {
+                    console.error("GAS Error Response:", responseText);
+                    throw new Error("สิทธิ์การเข้าถึง Google Apps Script ถูกปฏิเสธ กรุณาตรวจสอบการตั้งค่า Deploy");
+                }
+                
+                if (!res || !res.success) {
+                    throw new Error(res?.message || "อัปโหลดรูปลง Drive ล้มเหลว");
+                }
 
                 Swal.fire({ title: '3/3: กำลังอัปเดตฐานข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
                 await update(ref(db, `students/${this.selectedStudent.key}`), { descriptor: descriptorJson, imageUrl: res.url });
