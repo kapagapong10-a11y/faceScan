@@ -1290,43 +1290,71 @@ const firebaseConfig = {
         },
 
         // ================= TEACHER DAILY FUNCTIONS =================
-        async loadTeacherClass() {
-          Swal.fire({ title: 'กำลังโหลดรายชื่อ...', didOpen: () => Swal.showLoading() });
-          try {
-            const sSnap = await get(ref(db, 'students'));
-            let students = [];
-            if(sSnap.exists()) {
-              sSnap.forEach(c => {
-                if(String(c.val().classLevel) === String(this.currentUser.classLevel)) {
-                  students.push({ key: c.key, ...c.val(), todayTime: '-', todayStatus: null, stats: { normal:0, late:0, leave:0, absent:0 } });
-                }
-              });
-            }
-            const attSnap = await get(ref(db, 'attendance'));
-            if(attSnap.exists()) {
-              attSnap.forEach(c => {
-                const r = c.val();
-                if(String(r.classLevel) === String(this.currentUser.classLevel)) {
-                  const student = students.find(s => s.id === r.studentId);
-                  if(student && r.scanType !== 'ออก') {
-                    if(r.status === 'มาปกติ') student.stats.normal++;
-                    else if(r.status === 'มาสาย') student.stats.late++;
-                    else if(r.status === 'ลา') student.stats.leave++;
-                    else if(r.status === 'ขาด') student.stats.absent++;
-                    
-                    if(r.date === this.selectedDate) {
-                      student.todayTime = r.time;
-                      student.todayStatus = r.status;
-                    }
-                  }
-                }
-              });
-            }
-            this.myClassStudents = students.sort((a,b) => (a.number||0) - (b.number||0));
-            this.checkIfSchoolDay();
-            Swal.close();
-          } catch(e) { Swal.fire('Error', e.message, 'error'); }
-        },
+async loadTeacherClass() {
+  Swal.fire({ title: 'กำลังโหลดรายชื่อ...', didOpen: () => Swal.showLoading() });
+  try {
+    const snap = await get(ref(db, 'students'));
+    if(!snap.exists()) { this.myClassStudents = []; Swal.close(); return; }
+
+    let students = [];
+    
+    // --- จุดที่แก้ไข: ตัดคำว่า "ม." และช่องว่างของฝั่งครูออก ---
+    const teacherClass = String(this.currentUser.classLevel).replace(/ม\.|\s/g, '');
+
+    snap.forEach(child => {
+      // --- จุดที่แก้ไข: ตัดคำว่า "ม." ของฝั่งนักเรียนออก แล้วค่อยเทียบกัน ---
+      const studentClass = String(child.val().classLevel).replace(/ม\.|\s/g, '');
+      
+      if(studentClass === teacherClass) {
+        students.push(child.val());
+      }
+    });
+
+    const attSnap = await get(ref(db, 'attendance'));
+
+    // ล้างค่าสถานะปัจจุบันและสถิติเริ่มต้น
+    students.forEach(s => {
+      s.stats = { normal: 0, late: 0, leave: 0, absent: 0 };
+      s.todayStatus = null;
+      s.todayTime = '-';
+    });
+    
+    let scansOnDate = 0;
+    let dateRecords = {};
+
+    if (attSnap.exists()) {
+      attSnap.forEach(c => {
+        const rec = c.val();
+        const key = `${rec.studentId}_${rec.date}`;
+        if (!dateRecords[key] || rec.time < dateRecords[key].time) {
+          dateRecords[key] = rec;
+        }
+      });
+    }
+    
+    Object.values(dateRecords).forEach(rec => {
+      const student = students.find(s => String(s.id) === String(rec.studentId));
+      if (student) {
+        if(rec.status === 'มาปกติ') student.stats.normal++;
+        else if(rec.status === 'มาสาย') student.stats.late++;
+        else if(rec.status === 'ลา') student.stats.leave++;
+        else if(rec.status === 'ขาด') student.stats.absent++;
+        
+        if (rec.date === this.selectedDate) {
+          student.todayStatus = rec.status;
+          student.todayTime = rec.time;
+          if (rec.time !== '-') scansOnDate++;
+        }
+      }
+    });
+    
+    this.isSchoolDay = (scansOnDate > 0);
+    this.myClassStudents = students.sort((a,b) => parseInt(a.number || '0', 10) - parseInt(b.number || '0', 10));
+    Swal.close();
+  } catch(e) { Swal.fire('Error', e.message, 'error'); }
+},
+
+        
         async checkIfSchoolDay() {
           const q = query(ref(db, 'attendance'), orderByChild('date'), equalTo(this.selectedDate));
           const snap = await get(q);
@@ -1345,7 +1373,68 @@ const firebaseConfig = {
             Swal.fire({ toast:true, position:'top-end', icon:'success', title:'บันทึกสำเร็จ', showConfirmButton:false, timer:1500 });
           } catch(e) { Swal.fire('Error', e.message, 'error'); }
         },
-        findMissingChecks() { Swal.fire('ระบบแนะนำ', 'คุณสามารถเปลี่ยนวันที่ในช่องปฏิทินเพื่อดูข้อมูลย้อนหลัง และกดบันทึกให้เด็กที่ค้างเช็คได้เลย', 'info'); },
+        async findMissingChecks() {
+          Swal.fire({ title: 'กำลังค้นหาวันที่ค้างเช็ค...', didOpen: () => Swal.showLoading() });
+          try {
+            const attSnap = await get(ref(db, 'attendance'));
+            let dateMap = {};
+            const totalStudents = this.myClassStudents.length;
+        
+            if(totalStudents === 0) return Swal.fire('แจ้งเตือน', 'ไม่มีนักเรียนในห้องนี้', 'info');
+            
+            // --- จุดที่แก้ไข: ตัดคำว่า "ม." ออก ---
+            const teacherClass = String(this.currentUser.classLevel).replace(/ม\.|\s/g, '');
+        
+            if (attSnap.exists()) {
+              attSnap.forEach(c => {
+                const rec = c.val();
+                
+                // --- จุดที่แก้ไข: ตัดคำว่า "ม." ออก ---
+                const recClass = String(rec.classLevel).replace(/ม\.|\s/g, '');
+        
+                if (recClass === teacherClass) {
+                  if(!dateMap[rec.date]) dateMap[rec.date] = { scans: 0, records: 0, checkedUsers: new Set() };
+        
+                  if(!dateMap[rec.date].checkedUsers.has(rec.studentId)) {
+                    dateMap[rec.date].checkedUsers.add(rec.studentId);
+                    dateMap[rec.date].records++;
+                    if(rec.time !== '-') dateMap[rec.date].scans++;
+                  }
+                }
+              });
+            }
+        
+            let missingDates = [];
+            for (const [date, data] of Object.entries(dateMap)) {
+              if (data.scans > 0 && data.records < totalStudents) {
+                missingDates.push({ date, missingCount: totalStudents - data.records });
+              }
+            }
+        
+            missingDates.sort((a,b) => new Date(b.date) - new Date(a.date));
+        
+            if (missingDates.length === 0) {
+              Swal.fire('ยอดเยี่ยม!', 'ไม่มีวันที่ค้างเช็คชื่อครับ (เช็คครบทุกวันแล้ว)', 'success');
+            } else {
+              let html = '<div class="flex flex-col gap-2 max-h-64 overflow-y-auto p-2">';
+              missingDates.forEach(d => {
+                html += `<button class="bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 px-4 py-3 rounded-xl font-bold text-left flex justify-between items-center transition" onclick="window.selectMissingDate('${d.date}')">
+                  <span><i class="fa-regular fa-calendar-xmark mr-2"></i> ${this.formatDate(d.date)}</span>
+                  <span class="bg-red-500 text-white px-2 py-1 rounded-lg text-xs">ค้าง ${d.missingCount} คน</span>
+                </button>`;
+              });
+              html += '</div>';
+        
+              Swal.fire({
+                title: 'วันที่ยังเช็คชื่อไม่ครบ',
+                html: html,
+                showConfirmButton: false,
+                showCancelButton: true,
+                cancelButtonText: 'ปิดหน้าต่าง'
+              });
+            }
+          } catch(e) { Swal.fire('Error', e.message, 'error'); }
+        },
 
         // ================= PDF REPORTS SYSTEM (1.1 & 1.2) =================
         async loadTeacherReportData() {
