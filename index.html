@@ -336,6 +336,9 @@
                     <button @click="adminSubTab = 'teachers'" :class="adminSubTab === 'teachers' ? 'bg-orange-100 text-orange-700 font-bold' : 'text-gray-600 hover:bg-gray-100'" class="px-5 py-2.5 rounded-xl transition flex-1 sm:flex-none text-center">
                         <i class="fa-solid fa-chalkboard-user mr-1"></i> จัดการครู
                     </button>
+                    <button @click="adminSubTab = 'settings'" :class="adminSubTab === 'settings' ? 'bg-gray-800 text-white font-bold' : 'text-gray-600 hover:bg-gray-100'" class="px-5 py-2.5 rounded-xl transition flex-1 sm:flex-none text-center">
+                      <i class="fa-solid fa-gear mr-1"></i> ตั้งค่าเวลา
+                    </button>
                 </div>
                 <button @click="loadAdminData" class="bg-gray-800 hover:bg-gray-900 text-white px-5 py-2.5 rounded-xl font-bold transition flex items-center gap-2 shadow w-full md:w-auto justify-center">
                     <i class="fa-solid fa-rotate-right"></i> รีเฟรชข้อมูลล่าสุด
@@ -500,6 +503,47 @@
                     </table>
                 </div>
             </div>
+
+            <div v-if="adminSubTab === 'settings'" class="bg-white p-6 rounded-3xl shadow-lg border-t-8 border-gray-800">
+              <div class="mb-6 border-b pb-4">
+                <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-clock"></i> ตั้งค่าเวลาสแกนเข้า-ออก</h2>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-gray-50 p-4 rounded-xl border">
+                  <h3 class="font-bold text-blue-600 mb-4"><i class="fa-solid fa-sun"></i> รอบเช้า (สแกนเข้า)</h3>
+                  <div class="space-y-3">
+                    <div>
+                      <label class="block text-sm font-bold text-gray-700">เริ่มสแกนเข้าได้ตั้งแต่เวลา</label>
+                      <input type="time" v-model="systemSettings.checkInStart" class="w-full border p-2 rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-400">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold text-gray-700 text-orange-600">หลังเวลานี้ถือว่า "มาสาย"</label>
+                      <input type="time" v-model="systemSettings.lateTime" class="w-full border p-2 rounded-lg mt-1 outline-none focus:ring-2 focus:ring-orange-400">
+                    </div>
+                    <div>
+                      <label class="block text-sm font-bold text-gray-700">สิ้นสุดการสแกนเข้าเวลา</label>
+                      <input type="time" v-model="systemSettings.checkInEnd" class="w-full border p-2 rounded-lg mt-1 outline-none focus:ring-2 focus:ring-blue-400">
+                    </div>
+                  </div>
+                </div>
+            
+                <div class="bg-gray-50 p-4 rounded-xl border">
+                  <h3 class="font-bold text-green-600 mb-4"><i class="fa-solid fa-moon"></i> รอบเย็น (สแกนออก)</h3>
+                  <div class="space-y-3">
+                    <div>
+                      <label class="block text-sm font-bold text-gray-700">เริ่มสแกนออก (กลับบ้าน) ได้ตั้งแต่เวลา</label>
+                      <input type="time" v-model="systemSettings.checkOutStart" class="w-full border p-2 rounded-lg mt-1 outline-none focus:ring-2 focus:ring-green-400">
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="mt-6">
+                <button @click="saveSystemSettings" class="bg-gray-800 hover:bg-gray-900 text-white px-8 py-3 rounded-xl font-bold transition shadow-lg flex items-center gap-2">
+                  <i class="fa-solid fa-floppy-disk"></i> บันทึกการตั้งค่า
+                </button>
+              </div>
+            </div>
+            
         </div>
 
         <!-- ================= MODALS ================= -->
@@ -617,48 +661,57 @@ const db = getDatabase(app);
 const { createApp } = Vue;
 
 const myApp = createApp({
-    data() {
-        return {
-            currentTab: 'menu',
-            currentUser: null,
-            loginData: { username: '', password: '' },
+data() {
+  return {
+    currentTab: 'menu',
+    currentUser: null,
+    loginData: { username: '', password: '' },
 
-            // Scan System Data
-            isAiLoading: false,
-            faceMatcher: null,
-            videoStream: null,
-            isScanning: false,
-            studentMap: {}, 
-            scannedToday: new Set(), 
-            recentScans: [],
-            cooldowns: {},
-            matchCounters: {}, // ตัวแปรสำหรับเก็บจำนวนเฟรมยืนยันตัวตน
+    // Scan System Data
+    isAiLoading: false,
+    faceMatcher: null,
+    videoStream: null,
+    isScanning: false,
+    studentMap: {},
+    scannedTodayIn: new Set(),  // สำหรับเก็บประวัติการสแกนเข้ารอบเช้า
+    scannedTodayOut: new Set(), // สำหรับเก็บประวัติการสแกนออกรอบเย็น
+    recentScans: [],
+    cooldowns: {},
+    matchCounters: {}, // ตัวแปรสำหรับเก็บจำนวนเฟรมยืนยันตัวตน
 
-            // Parent Data
-            parentData: { history: [], stats: { normal: 0, late: 0, absent: 0, leave: 0 } },
-            showParentSettings: false,
-            parentSettingsForm: { parentUsername: '', parentPassword: '', telegramChatId: '' },
+    // Parent Data
+    parentData: { history: [], stats: { normal: 0, late: 0, absent: 0, leave: 0 } },
+    showParentSettings: false,
+    parentSettingsForm: { parentUsername: '', parentPassword: '', telegramChatId: '' },
 
-            // Teacher Data
-            myClassStudents: [],
-            selectedDate: new Date().toISOString().split('T')[0], 
-            isSchoolDay: true, 
+    // Teacher Data
+    myClassStudents: [],
+    selectedDate: new Date().toISOString().split('T')[0],
+    isSchoolDay: true,
 
-            // Admin Data
-            adminSubTab: 'students',
-            adminData: { students: [], teachers: [] },
-            scanFilter: { search: '', classLevel: '' },
-            
-            // Modal States
-            showFormModal: false,
-            formType: 'student', 
-            isEditing: false,
-            formData: {},
-            
-            showFaceModal: false,
-            selectedStudent: null
-        }
+    // Admin Data
+    adminSubTab: 'students',
+    adminData: { students: [], teachers: [] },
+    scanFilter: { search: '', classLevel: '' },
+
+    // System Settings (ตัวแปรใหม่สำหรับตั้งเวลาสแกน)
+    systemSettings: { 
+      checkInStart: '06:00', 
+      checkInEnd: '10:00', 
+      lateTime: '08:30', 
+      checkOutStart: '15:00' 
     },
+
+    // Modal States
+    showFormModal: false,
+    formType: 'student',
+    isEditing: false,
+    formData: {},
+
+    showFaceModal: false,
+    selectedStudent: null
+  }
+},
     computed: {
         uniqueClasses() {
             const classes = this.adminData.students.map(s => String(s.classLevel || '')).filter(c => c);
@@ -699,13 +752,42 @@ const myApp = createApp({
     },
     methods: {
         async autoSetupDatabase() {
-            try {
-                const adminQuery = query(ref(db, 'teachers'), orderByChild('username'), equalTo('admin'));
-                const snap = await get(adminQuery);
-                if (!snap.exists()) {
-                    await push(ref(db, 'teachers'), { username: "admin", password: "1234", name: "ผู้ดูแลระบบ", role: "admin", classLevel: "all" });
-                }
-            } catch(e) { console.error("Firebase Setup Error:", e); }
+          try {
+            // 1. ดึงข้อมูลการตั้งค่าเวลาจาก Firebase (ถ้ามี)
+            const settingsSnap = await get(ref(db, 'settings'));
+            if (settingsSnap.exists()) {
+              // ถ้าในฐานข้อมูลมีค่าเวลาที่แอดมินเคยตั้งไว้ ให้ดึงมาใช้งาน
+              this.systemSettings = settingsSnap.val();
+            } else {
+              // ถ้ายังไม่มีข้อมูล (เปิดใช้งานระบบครั้งแรก) ให้บันทึกค่าเริ่มต้นจากเครื่องไปไว้บน Firebase
+              await update(ref(db, 'settings'), this.systemSettings);
+            }
+        
+            // 2. ตรวจสอบและสร้างบัญชีผู้ดูแลระบบ (Admin) เริ่มต้น (โค้ดส่วนเดิม)
+            const adminQuery = query(ref(db, 'teachers'), orderByChild('username'), equalTo('admin'));
+            const snap = await get(adminQuery);
+            if (!snap.exists()) {
+              await push(ref(db, 'teachers'), { 
+                username: "admin", 
+                password: "1234", 
+                name: "ผู้ดูแลระบบ", 
+                role: "admin", 
+                classLevel: "all" 
+              });
+            }
+          } catch(e) { 
+            console.error("Firebase Setup Error:", e); 
+          }
+        },
+
+        async saveSystemSettings() {
+          Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+          try {
+            await update(ref(db, 'settings'), this.systemSettings);
+            Swal.fire({ toast:true, position:'top-end', icon:'success', title: 'บันทึกเวลาสแกนเรียบร้อย', showConfirmButton:false, timer:1500 });
+          } catch(e) { 
+            Swal.fire('Error', e.message, 'error'); 
+          }
         },
         goToMenu() {
             this.stopVideo();
@@ -722,162 +804,180 @@ const myApp = createApp({
 
         // ================= AI & SCANNER LOGIC =================
         async startScanSystem(videoId, isRegistration = false) {
-            this.isAiLoading = true;
-            try {
-                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
-                await Promise.all([
-                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
-                ]);
-                
-                if (!isRegistration) {
-                    const snap = await get(ref(db, 'students'));
-                    const labeledDescriptors = [];
-                    this.studentMap = {}; 
-                    
-                    if (snap.exists()) {
-                        const studentsData = snap.val();
-                        Object.keys(studentsData).forEach(key => {
-                            const data = studentsData[key];
-                            if(data.descriptor) {
-                                const desc = new Float32Array(JSON.parse(data.descriptor));
-                                labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(data.id, [desc]));
-                                this.studentMap[data.id] = data.name; 
-                            }
-                        });
+          this.isAiLoading = true;
+          try {
+            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+            await Promise.all([
+              faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+              faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+              faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+            ]);
+        
+            if (!isRegistration) {
+              const snap = await get(ref(db, 'students'));
+              const labeledDescriptors = [];
+              this.studentMap = {};
+        
+              if (snap.exists()) {
+                const studentsData = snap.val();
+                Object.keys(studentsData).forEach(key => {
+                  const data = studentsData[key];
+                  if(data.descriptor) {
+                    const desc = new Float32Array(JSON.parse(data.descriptor));
+                    labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(data.id, [desc]));
+                    this.studentMap[data.id] = data.name;
+                  }
+                });
+              }
+              
+              // ล้างค่าประวัติการสแกนของวันนี้ (แยกเช้า-เย็น)
+              this.scannedTodayIn = new Set();
+              this.scannedTodayOut = new Set();
+              this.recentScans = [];
+              this.matchCounters = {}; // ล้างตัวนับเฟรม
+        
+              const todayStr = new Date().toISOString().split('T')[0];
+              const attSnap = await get(ref(db, 'attendance'));
+        
+              if (attSnap.exists()) {
+                const todayLogs = [];
+                attSnap.forEach(child => {
+                  const rec = child.val();
+                  if (rec.date === todayStr) {
+                    // แยกเก็บประวัติว่าวันนี้สแกนเข้า หรือ สแกนออกไปแล้ว
+                    if (rec.scanType === 'ออก') {
+                      this.scannedTodayOut.add(rec.studentId);
+                    } else {
+                      this.scannedTodayIn.add(rec.studentId);
                     }
-
-                    this.scannedToday = new Set();
-                    this.recentScans = [];
-                    this.matchCounters = {}; // ล้างตัวนับเฟรม
-                    
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    const attSnap = await get(ref(db, 'attendance'));
-                    
-                    if (attSnap.exists()) {
-                        const todayLogs = [];
-                        attSnap.forEach(child => {
-                            const rec = child.val();
-                            if (rec.date === todayStr) {
-                                this.scannedToday.add(rec.studentId);
-                                todayLogs.push({ id: child.key, name: rec.name, time: rec.time, status: rec.status });
-                            }
-                        });
-                        this.recentScans = todayLogs.sort((a, b) => b.time.localeCompare(a.time)).slice(0, 10);
-                    }
-
-                    // *** ปรับความคลาดเคลื่อน (Threshold) ให้เข้มงวดสุดๆ (0.42) เพื่อลดอัตราการทายผิดคน (False Positive) ***
-                    if(labeledDescriptors.length > 0) this.faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.42);
-                }
-                await this.startVideo(videoId, isRegistration);
-            } catch(e) { Swal.fire('ข้อผิดพลาด', 'โหลด AI ไม่สำเร็จ โปรดตรวจสอบอินเทอร์เน็ต', 'error'); }
-            this.isAiLoading = false;
+                    todayLogs.push({ id: child.key, name: rec.name, time: rec.time, status: rec.status });
+                  }
+                });
+                this.recentScans = todayLogs.sort((a, b) => b.time.localeCompare(a.time)).slice(0, 10);
+              }
+              // *** ปรับความคลาดเคลื่อน (Threshold) ให้เข้มงวดสุดๆ (0.42) เพื่อลดอัตราการทายผิดคน (False Positive) ***
+              if(labeledDescriptors.length > 0) this.faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.42);
+            }
+            await this.startVideo(videoId, isRegistration);
+          } catch(e) { 
+            Swal.fire('ข้อผิดพลาด', 'โหลด AI ไม่สำเร็จ โปรดตรวจสอบอินเทอร์เน็ต', 'error'); 
+          }
+          this.isAiLoading = false;
         },
         
         async startVideo(videoId, isRegistration = false) {
-            const video = document.getElementById(videoId);
-            if(!video) return;
-            try {
-                this.videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
-                video.srcObject = this.videoStream;
-
-                if(!isRegistration) {
-                    this.isScanning = true;
-                    
-                    // กระบวนการสแกนใบหน้าและวาดกรอบ
-                    const processVideo = async () => {
-                        if (!this.isScanning || this.currentTab !== 'scan') return;
+          const video = document.getElementById(videoId);
+          if(!video) return;
+          try {
+            this.videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+            video.srcObject = this.videoStream;
+            if(!isRegistration) {
+              this.isScanning = true;
+        
+              // กระบวนการสแกนใบหน้าและวาดกรอบ
+              const processVideo = async () => {
+                if (!this.isScanning || this.currentTab !== 'scan') return;
+        
+                try {
+                  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    const canvas = document.getElementById('overlay');
+                    const displaySize = { width: video.clientWidth, height: video.clientHeight };
+        
+                    // เช็คและอัปเดตขนาด canvas ถ้าจอภาพหรือกล้องเปลี่ยนขนาด
+                    if (canvas.width !== displaySize.width || canvas.height !== displaySize.height) {
+                      faceapi.matchDimensions(canvas, displaySize);
+                    }
+        
+                    const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 });
+                    const detections = await faceapi.detectAllFaces(video, options).withFaceLandmarks().withFaceDescriptors();
+                    const resizedDetections = faceapi.resizeResults(detections, displaySize);
+        
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    if (resizedDetections.length > 0) {
+                      resizedDetections.forEach(det => {
+                        const box = det.detection.box;
+                        let text = 'ไม่รู้จัก';
+                        let color = '#ef4444'; // แดง
+                        let isKnown = false;
+                        let matchLabel = 'unknown';
+        
+                        // ประมวลผลหาใบหน้าที่ตรงกัน (ถ้ามีฐานข้อมูล)
+                        if (this.faceMatcher) {
+                          const bestMatch = this.faceMatcher.findBestMatch(det.descriptor);
+                          matchLabel = bestMatch.label;
+                          isKnown = matchLabel !== 'unknown';
+                        }
+        
+                        // --- ส่วนที่แก้ไข: เช็คเวลาว่าเป็นรอบสแกนเข้า หรือ รอบสแกนออก ---
+                        const currentTimeStr = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
+                        const isCheckOutPhase = currentTimeStr >= this.systemSettings.checkOutStart;
                         
-                        try {
-                            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                                const canvas = document.getElementById('overlay');
-                                const displaySize = { width: video.clientWidth, height: video.clientHeight };
-                                
-                                // เช็คและอัปเดตขนาด canvas ถ้าจอภาพหรือกล้องเปลี่ยนขนาด
-                                if (canvas.width !== displaySize.width || canvas.height !== displaySize.height) {
-                                    faceapi.matchDimensions(canvas, displaySize);
-                                }
-                                
-                                const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.4 });
-                                const detections = await faceapi.detectAllFaces(video, options).withFaceLandmarks().withFaceDescriptors();
-                                const resizedDetections = faceapi.resizeResults(detections, displaySize);
-                                
-                                const ctx = canvas.getContext('2d');
-                                ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                                if (resizedDetections.length > 0) {
-                                    resizedDetections.forEach(det => {
-                                        const box = det.detection.box;
-                                        let text = 'ไม่รู้จัก';
-                                        let color = '#ef4444'; // แดง
-                                        let isKnown = false;
-                                        let matchLabel = 'unknown';
-
-                                        // ประมวลผลหาใบหน้าที่ตรงกัน (ถ้ามีฐานข้อมูล)
-                                        if (this.faceMatcher) {
-                                            const bestMatch = this.faceMatcher.findBestMatch(det.descriptor);
-                                            matchLabel = bestMatch.label;
-                                            isKnown = matchLabel !== 'unknown';
-                                        }
-
-                                        const hasScanned = this.scannedToday.has(matchLabel);
-
-                                        if (isKnown) {
-                                            if (hasScanned) {
-                                                // ถ้าสแกนไปแล้วให้ขึ้นสีฟ้า และไม่ต้องนับเฟรมซ้ำ
-                                                text = (this.studentMap[matchLabel] || matchLabel) + ' (เช็คแล้ว)';
-                                                color = '#3b82f6'; // ฟ้า
-                                            } else {
-                                                // *** ระบบยืนยันตัวตน 3 เฟรม (ลดความผิดพลาด 99.9%) ***
-                                                this.matchCounters[matchLabel] = (this.matchCounters[matchLabel] || 0) + 1;
-                                                
-                                                if (this.matchCounters[matchLabel] >= 3) {
-                                                    text = this.studentMap[matchLabel] || matchLabel;
-                                                    color = '#22c55e'; // เขียว = ผ่านเกณฑ์ ยืนยันสำเร็จ
-                                                    this.scannedToday.add(matchLabel); // ล็อกสิทธิ์ทันที
-                                                    this.processAttendance(matchLabel);
-                                                } else {
-                                                    text = 'กำลังยืนยัน... ' + Math.floor((this.matchCounters[matchLabel]/3)*100) + '%';
-                                                    color = '#eab308'; // เหลือง = เห็นหน้าแล้ว แต่ขอยืนยันอีก 1-2 เฟรมเพื่อความชัวร์
-                                                }
-                                            }
-                                        }
-
-                                        // คำนวณพิกัด X แบบ Mirror เพื่อให้กรอบตรงกับหน้าคนบนจอภาพ
-                                        const mirrorX = canvas.width - box.x - box.width;
-
-                                        // 1. วาดกรอบใบหน้า (เส้นหนาขึ้นให้เห็นชัดเจน)
-                                        ctx.strokeStyle = color;
-                                        ctx.lineWidth = 4;
-                                        ctx.strokeRect(mirrorX, box.y, box.width, box.height);
-
-                                        // 2. วาดพื้นหลังป้ายชื่อ
-                                        ctx.fillStyle = color;
-                                        ctx.font = 'bold 16px Sarabun';
-                                        const textWidth = ctx.measureText(text).width;
-                                        ctx.fillRect(mirrorX, box.y - 30, textWidth + 16, 30);
-
-                                        // 3. เขียนข้อความ
-                                        ctx.fillStyle = '#ffffff';
-                                        ctx.fillText(text, mirrorX + 8, box.y - 10);
-                                    });
-                                }
+                        // ตรวจสอบว่ารอบนี้สแกนไปหรือยัง
+                        const hasScanned = isCheckOutPhase ? this.scannedTodayOut.has(matchLabel) : this.scannedTodayIn.has(matchLabel);
+        
+                        if (isKnown) {
+                          if (hasScanned) {
+                            // ถ้าสแกนไปแล้วให้ขึ้นสีฟ้า และไม่ต้องนับเฟรมซ้ำ
+                            text = (this.studentMap[matchLabel] || matchLabel) + ' (เช็คแล้ว)';
+                            color = '#3b82f6'; // ฟ้า
+                          } else {
+                            // *** ระบบยืนยันตัวตน 3 เฟรม (ลดความผิดพลาด 99.9%) ***
+                            this.matchCounters[matchLabel] = (this.matchCounters[matchLabel] || 0) + 1;
+        
+                            if (this.matchCounters[matchLabel] >= 3) {
+                              text = this.studentMap[matchLabel] || matchLabel;
+                              color = '#22c55e'; // เขียว = ผ่านเกณฑ์ ยืนยันสำเร็จ
+                              
+                              // --- ส่วนที่แก้ไข: บันทึกสถานะว่าสแกนแล้ว แยกตามรอบ ---
+                              if (isCheckOutPhase) {
+                                this.scannedTodayOut.add(matchLabel);
+                              } else {
+                                this.scannedTodayIn.add(matchLabel);
+                              }
+                              
+                              this.processAttendance(matchLabel);
+                            } else {
+                              text = 'กำลังยืนยัน... ' + Math.floor((this.matchCounters[matchLabel]/3)*100) + '%';
+                              color = '#eab308'; // เหลือง = เห็นหน้าแล้ว แต่ขอยืนยันอีก 1-2 เฟรมเพื่อความชัวร์
                             }
-                        } catch (err) {
-                            console.error("Video processing error:", err);
+                          }
                         }
+        
+                        // คำนวณพิกัด X แบบ Mirror เพื่อให้กรอบตรงกับหน้าคนบนจอภาพ
+                        const mirrorX = canvas.width - box.x - box.width;
                         
-                        // วนลูปการทำงานต่อไปเรื่อยๆ
-                        if (this.isScanning) {
-                            requestAnimationFrame(processVideo);
-                        }
-                    };
-                    
-                    // เริ่มคำสั่ง processVideo ทันทีไม่ต้องรอ Event listener (แก้บั๊กเบราว์เซอร์ไม่ยิง Event)
-                    processVideo();
+                        // 1. วาดกรอบใบหน้า (เส้นหนาขึ้นให้เห็นชัดเจน)
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 4;
+                        ctx.strokeRect(mirrorX, box.y, box.width, box.height);
+                        
+                        // 2. วาดพื้นหลังป้ายชื่อ
+                        ctx.fillStyle = color;
+                        ctx.font = 'bold 16px Sarabun';
+                        const textWidth = ctx.measureText(text).width;
+                        ctx.fillRect(mirrorX, box.y - 30, textWidth + 16, 30);
+                        
+                        // 3. เขียนข้อความ
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillText(text, mirrorX + 8, box.y - 10);
+                      });
+                    }
+                  }
+                } catch (err) {
+                  console.error("Video processing error:", err);
                 }
-            } catch(err) { Swal.fire('ถูกบล็อกสิทธิ์', 'กรุณาอนุญาตการเข้าถึงกล้องถ่ายรูป', 'error'); }
+        
+                // วนลูปการทำงานต่อไปเรื่อยๆ
+                if (this.isScanning) {
+                  requestAnimationFrame(processVideo);
+                }
+              };
+        
+              // เริ่มคำสั่ง processVideo ทันทีไม่ต้องรอ Event listener (แก้บั๊กเบราว์เซอร์ไม่ยิง Event)
+              processVideo();
+            }
+          } catch(err) { Swal.fire('ถูกบล็อกสิทธิ์', 'กรุณาอนุญาตการเข้าถึงกล้องถ่ายรูป', 'error'); }
         },
         
         stopVideo() {
@@ -885,37 +985,53 @@ const myApp = createApp({
             if(this.videoStream) { this.videoStream.getTracks().forEach(t => t.stop()); this.videoStream = null; }
         },
         async processAttendance(studentId) {
-            try {
-                const q = query(ref(db, 'students'), orderByChild('id'), equalTo(studentId));
-                const snap = await get(q);
-                if (!snap.exists()) return;
-                let studentData;
-                snap.forEach(child => { studentData = child.val(); });
-
-                const timeStr = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
-                const dateStr = new Date().toISOString().split('T')[0];
-                const status = timeStr > "08:30" ? "มาสาย" : "มาปกติ";
-
-                await push(ref(db, 'attendance'), {
-                    studentId, name: studentData.name, classLevel: studentData.classLevel,
-                    date: dateStr, time: timeStr, status, timestamp: serverTimestamp()
-                });
-                
-                this.recentScans.unshift({ id: Date.now(), name: studentData.name, time: timeStr, status });
-                if(this.recentScans.length > 10) this.recentScans.pop();
-
-                if(studentData.telegramChatId) {
-                    fetch(GAS_API_URL, {
-                        method: 'POST', redirect: 'follow', headers: { "Content-Type": "text/plain;charset=utf-8" },
-                        body: JSON.stringify({
-                            action: "telegram", chatId: studentData.telegramChatId,
-                            message: ` 🔔  <b>แจ้งเตือนการเข้าเรียน</b>\nนร.: ${studentData.name}\nเวลา: ${timeStr} น.\nสถานะ: ${status}\n\n🌐 <b>ตรวจสอบข้อมูลการเข้าเรียน:</b>\nhttps://kapagapong10-a11y.github.io/faceScan/`
-                        })
-                    }).catch(e => console.error(e));
-                }
-            } catch(e) { console.error(e); }
+          try {
+            const q = query(ref(db, 'students'), orderByChild('id'), equalTo(studentId));
+            const snap = await get(q);
+            if (!snap.exists()) return;
+            
+            let studentData;
+            snap.forEach(child => { studentData = child.val(); });
+            
+            const timeStr = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
+            const dateStr = new Date().toISOString().split('T')[0];
+            
+            let status = "";
+            let scanType = ""; // "เข้า" หรือ "ออก"
+        
+            // เช็คเงื่อนไขตามเวลาที่แอดมินตั้งค่า
+            if (timeStr >= this.systemSettings.checkOutStart) {
+                scanType = "ออก";
+                status = "กลับบ้าน";
+            } else if (timeStr >= this.systemSettings.checkInStart && timeStr <= this.systemSettings.checkInEnd) {
+                scanType = "เข้า";
+                status = timeStr > this.systemSettings.lateTime ? "มาสาย" : "มาปกติ";
+            } else {
+                // ถ้านอกเวลา ให้แจ้งเตือนบนจอและไม่บันทึก
+                Swal.fire({ toast:true, position:'top', icon:'warning', title: `ขณะนี้อยู่นอกเวลาสแกน`, showConfirmButton:false, timer:2000 });
+                return; 
+            }
+        
+            await push(ref(db, 'attendance'), {
+              studentId, name: studentData.name, classLevel: studentData.classLevel,
+              date: dateStr, time: timeStr, status, scanType: scanType, timestamp: serverTimestamp()
+            });
+        
+            this.recentScans.unshift({ id: Date.now(), name: studentData.name, time: timeStr, status: `${status} (${scanType})` });
+            if(this.recentScans.length > 10) this.recentScans.pop();
+            
+            if(studentData.telegramChatId) {
+              let icon = scanType === "เข้า" ? "🏫" : "🏠";
+              fetch(GAS_API_URL, {
+                method: 'POST', redirect: 'follow', headers: { "Content-Type": "text/plain;charset=utf-8" },
+                body: JSON.stringify({
+                  action: "telegram", chatId: studentData.telegramChatId,
+                  message: ` ${icon} <b>แจ้งเตือนการสแกน${scanType}</b>\nนร.: ${studentData.name}\nเวลา: ${timeStr} น.\nสถานะ: ${status}\n\n 🌐 <b>ตรวจสอบข้อมูล:</b>\nhttps://kapagapong10-a11y.github.io/faceScan/`
+                })
+              }).catch(e => console.error(e));
+            }
+          } catch(e) { console.error(e); }
         },
-
         // ================= AUTHENTICATION =================
         async handleLogin(type) {
             if(!this.loginData.username || !this.loginData.password) return Swal.fire('แจ้งเตือน', 'กรุณากรอกข้อมูล', 'warning');
