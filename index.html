@@ -742,18 +742,20 @@
     import { getDatabase, ref, set, get, update, remove, push, query, orderByChild, equalTo, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
     // 1. ใส่ Config ของ Firebase ตรงนี้ให้ครบ
-    const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_AUTH_DOMAIN",
-      databaseURL: "YOUR_DATABASE_URL",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_STORAGE_BUCKET",
-      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-      appId: "YOUR_APP_ID"
-    };
+const firebaseConfig = {
+    apiKey: "AIzaSyCcbcchbHCjKwCw0xnNkqE42d7ZvK0g3Fk",
+    authDomain: "scan-708a9.firebaseapp.com",
+    databaseURL: "https://scan-708a9-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "scan-708a9",
+    storageBucket: "scan-708a9.firebasestorage.app",
+    messagingSenderId: "461577898006",
+    appId: "1:461577898006:web:b4019e156c4eacbe1bcd37",
+    measurementId: "G-7M1YP89VKY"
+};
+
     
     // 2. ใส่ลิงก์ Google Apps Script ตรงนี้
-    const GAS_API_URL = 'YOUR_GAS_API_URL';
+    const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbw4tSjxsbNFDWB8PzxtxVfBzeAZGilmqdRlb1dxxfXTsoH6ZYIOXIB_YLhJrMKXgdg3/exec';
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
