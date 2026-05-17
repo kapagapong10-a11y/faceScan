@@ -1603,8 +1603,8 @@ data() {
                 Swal.fire('สำเร็จ', 'บันทึกข้อมูลใบหน้าที่มีคุณภาพเรียบร้อย', 'success');
                 this.closeFaceScanModal();
             } catch(e) { Swal.fire('เกิดข้อผิดพลาด', e.message, 'error'); }
-        }
-    }
+        },
+    
     // ==================== FUNCTIONS FOR PDF REPORT SYSTEM ====================
 
 async loadTeacherReportData() {
@@ -1834,6 +1834,7 @@ exportIndividualReportPDF(student) {
   };
 
   html2pdf().from(printArea).set(config).save();
+    }
 }
 });
 
