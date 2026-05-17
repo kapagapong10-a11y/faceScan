@@ -1437,54 +1437,68 @@ async loadTeacherClass() {
         },
 
         // ================= PDF REPORTS SYSTEM (1.1 & 1.2) =================
-        async loadTeacherReportData() {
-          Swal.fire({ title: 'กำลังประมวลผลข้อมูล PDF...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-          try {
-            const sSnap = await get(ref(db, 'students'));
-            if(!sSnap.exists()) { this.reportClassData = []; Swal.close(); return; }
+async loadTeacherReportData() {
+  Swal.fire({ title: 'กำลังประมวลผลข้อมูล PDF...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+  try {
+    const sSnap = await get(ref(db, 'students'));
+    if(!sSnap.exists()) { this.reportClassData = []; Swal.close(); return; }
 
-            let students = [];
-            sSnap.forEach(child => {
-              if(String(child.val().classLevel) === String(this.currentUser.classLevel)) {
-                students.push({ key: child.key, ...child.val(), reportStats: { normal:0, late:0, leave:0, absent:0 }, detailedHistory: {} });
-              }
-            });
+    let students = [];
+    
+    // --- จุดที่แก้ 1: ตัดคำว่า "ม." และช่องว่างของฝั่งครูออก ---
+    const teacherClass = String(this.currentUser.classLevel).replace(/ม\.|\s/g, '');
 
-            const attSnap = await get(ref(db, 'attendance'));
-            if (attSnap.exists()) {
-              attSnap.forEach(c => {
-                const rec = c.val();
-                if (rec.date >= this.reportStartDate && rec.date <= this.reportEndDate && String(rec.classLevel) === String(this.currentUser.classLevel)) {
-                  const student = students.find(s => String(s.id) === String(rec.studentId));
-                  if (student) {
-                    if (!student.detailedHistory[rec.date]) student.detailedHistory[rec.date] = { inTime: '-', outTime: '-', inStatus: '-', outStatus: 'ไม่สแกนกลับ' };
+    sSnap.forEach(child => {
+      // --- จุดที่แก้ 2: ตัดคำว่า "ม." ของฝั่งนักเรียนออก ก่อนเทียบกัน ---
+      const studentClass = String(child.val().classLevel || '').replace(/ม\.|\s/g, '');
+      
+      if(studentClass === teacherClass) {
+        students.push({ key: child.key, ...child.val(), reportStats: { normal:0, late:0, leave:0, absent:0 }, detailedHistory: {} });
+      }
+    });
 
-                    if (rec.scanType === 'ออก') {
-                      student.detailedHistory[rec.date].outTime = rec.time;
-                      student.detailedHistory[rec.date].outStatus = 'กลับตรงเวลา';
-                    } else {
-                      student.detailedHistory[rec.date].inTime = rec.time !== '-' ? rec.time : 'ไม่ได้สแกน';
-                      if (rec.status === 'มาปกติ') { student.reportStats.normal++; student.detailedHistory[rec.date].inStatus = 'มาตรงเวลา'; }
-                      else if (rec.status === 'มาสาย') { student.reportStats.late++; student.detailedHistory[rec.date].inStatus = 'มาสาย'; }
-                      else if (rec.status === 'ลา') { student.reportStats.leave++; student.detailedHistory[rec.date].inStatus = 'ลา'; student.detailedHistory[rec.date].outStatus = 'ลา'; }
-                      else if (rec.status === 'ขาด') { student.reportStats.absent++; student.detailedHistory[rec.date].inStatus = 'ขาด'; student.detailedHistory[rec.date].outStatus = 'ขาด'; }
-                    }
-                  }
-                }
-              });
+    const attSnap = await get(ref(db, 'attendance'));
+    if (attSnap.exists()) {
+      attSnap.forEach(c => {
+        const rec = c.val();
+        
+        // --- จุดที่แก้ 3: ตัดคำว่า "ม." ของฝั่งประวัติสแกนออก ก่อนเทียบ ---
+        const recClass = String(rec.classLevel || '').replace(/ม\.|\s/g, '');
+        
+        if (rec.date >= this.reportStartDate && rec.date <= this.reportEndDate && recClass === teacherClass) {
+          const student = students.find(s => String(s.id) === String(rec.studentId));
+          if (student) {
+            if (!student.detailedHistory[rec.date]) {
+               student.detailedHistory[rec.date] = { inTime: '-', outTime: '-', inStatus: '-', outStatus: 'ไม่สแกนกลับ' };
             }
 
-            students.forEach(student => {
-              Object.keys(student.detailedHistory).forEach(date => {
-                if (!student.detailedHistory[date].inStatus || student.detailedHistory[date].inStatus === '-') delete student.detailedHistory[date];
-              });
-            });
+            if (rec.scanType === 'ออก') {
+              student.detailedHistory[rec.date].outTime = rec.time;
+              student.detailedHistory[rec.date].outStatus = 'กลับตรงเวลา';
+            } else {
+              student.detailedHistory[rec.date].inTime = rec.time !== '-' ? rec.time : 'ไม่ได้สแกน';
+              if (rec.status === 'มาปกติ') { student.reportStats.normal++; student.detailedHistory[rec.date].inStatus = 'มาตรงเวลา'; }
+              else if (rec.status === 'มาสาย') { student.reportStats.late++; student.detailedHistory[rec.date].inStatus = 'มาสาย'; }
+              else if (rec.status === 'ลา') { student.reportStats.leave++; student.detailedHistory[rec.date].inStatus = 'ลา'; student.detailedHistory[rec.date].outStatus = 'ลา'; }
+              else if (rec.status === 'ขาด') { student.reportStats.absent++; student.detailedHistory[rec.date].inStatus = 'ขาด'; student.detailedHistory[rec.date].outStatus = 'ขาด'; }
+            }
+          }
+        }
+      });
+    }
 
-            this.reportClassData = students.sort((a,b) => parseInt(a.number||'0') - parseInt(b.number||'0'));
-            Swal.close();
-          } catch(e) { Swal.fire('Error', e.message, 'error'); }
-        },
+    students.forEach(student => {
+      Object.keys(student.detailedHistory).forEach(date => {
+        if (!student.detailedHistory[date].inStatus || student.detailedHistory[date].inStatus === '-') {
+            delete student.detailedHistory[date];
+        }
+      });
+    });
 
+    this.reportClassData = students.sort((a,b) => parseInt(a.number||'0') - parseInt(b.number||'0'));
+    Swal.close();
+  } catch(e) { Swal.fire('Error', e.message, 'error'); }
+},
         exportClassReportPDF() {
           if (this.reportClassData.length === 0) return Swal.fire('คำเตือน', 'ไม่มีข้อมูลสรุปสำหรับจัดส่งรายงาน', 'warning');
           
