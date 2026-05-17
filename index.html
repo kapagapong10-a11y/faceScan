@@ -14,7 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         body { font-family: 'Sarabun', sans-serif; background-color: #f0f2f5; }
         
@@ -233,93 +233,200 @@
 
         <!-- ================= TEACHER DASHBOARD ================= -->
         <div v-if="currentTab === 'teacherDashboard'" class="space-y-6 mt-6">
-            <div class="bg-white p-6 md:p-8 rounded-3xl shadow-lg border-t-8 border-orange-500 overflow-hidden relative">
-                
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 gap-4">
-                    <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-list-check text-orange-500 mr-2"></i> เช็คชื่อ ม.{{ currentUser.classLevel }}</h2>
-                    
-                    <div class="flex flex-wrap items-center gap-3">
-                        <!-- เลือกวันที่ -->
-                        <div class="relative">
-                            <input type="date" v-model="selectedDate" @change="loadTeacherClass" class="bg-gray-50 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-bold outline-none focus:ring-2 focus:ring-orange-400 cursor-pointer shadow-sm">
-                        </div>
-
-                        <!-- สถานะวันหยุด หรือ ค้างเช็ค -->
-                        <div v-if="!isSchoolDay" class="bg-gray-100 text-gray-500 px-3 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm border border-gray-200">
-                            <i class="fa-solid fa-mug-hot"></i> วันหยุด (ไม่มีการสแกน)
-                        </div>
-                        <div v-else-if="isSchoolDay && incompleteCount > 0" class="bg-red-100 text-red-600 px-3 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm border border-red-200 animate-pulse">
-                            <i class="fa-solid fa-triangle-exclamation"></i> ค้างเช็ค {{ incompleteCount }} คน
-                        </div>
-                        <div v-else class="bg-green-100 text-green-600 px-3 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm border border-green-200">
-                            <i class="fa-solid fa-check-double"></i> เช็คครบแล้ว
-                        </div>
-
-                        <!-- ปุ่มตรวจสอบวันค้างเช็คย้อนหลัง -->
-                        <button @click="findMissingChecks" class="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-2 rounded-lg font-bold transition flex items-center gap-2 shadow-sm">
-                            <i class="fa-solid fa-calendar-check"></i> วันค้างเช็ค
-                        </button>
-                        
-                        <button @click="loadTeacherClass" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-lg font-bold transition flex items-center gap-2 shadow-sm">
-                            <i class="fa-solid fa-rotate-right"></i>
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="overflow-x-auto rounded-xl border border-gray-200">
-                    <table class="w-full text-left border-collapse whitespace-nowrap">
-                        <thead>
-                            <tr class="bg-gray-100 text-gray-700 border-b border-gray-200">
-                                <th class="p-4 font-bold text-center w-24">เลขประจำตัว</th>
-                                <th class="p-4 font-bold">ชื่อ-นามสกุล</th>
-                                <th class="p-4 font-bold text-center w-16">ชั้น</th>
-                                <th class="p-4 font-bold text-center w-16">เลขที่</th>
-                                <th class="p-4 font-bold text-center">เวลามา</th>
-                                <th class="p-4 font-bold text-center">สถานะวันนี้</th>
-                                <th class="p-4 font-bold text-center w-40">จัดการ</th>
-                                <th class="p-4 font-bold text-center w-32 border-l border-gray-300">สถิติรวม (มา/สาย/ลา/ขาด)</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            <tr v-for="student in myClassStudents" :key="student.id" class="hover:bg-orange-50 transition" :class="!isSchoolDay ? 'opacity-75 bg-gray-50' : ''">
-                                <td class="p-4 text-center text-gray-500">{{ student.id }}</td>
-                                <td class="p-4 font-bold text-gray-800">{{ student.name }}</td>
-                                <td class="p-4 text-center text-gray-600">ม.{{ student.classLevel }}</td>
-                                <td class="p-4 text-center font-bold text-gray-600">{{ student.number }}</td>
-                                <td class="p-4 text-center font-bold" :class="student.todayTime !== '-' && student.todayTime ? 'text-gray-800' : 'text-gray-400'">
-                                    {{ student.todayTime || '-' }}
-                                </td>
-                                <td class="p-4 text-center font-bold" :class="getStatusColor(student.todayStatus)">
-                                    <span v-if="student.todayStatus" class="flex items-center justify-center gap-1">
-                                        <i class="fa-solid fa-circle text-[10px]"></i> {{ student.todayStatus }}
-                                    </span>
-                                    <span v-else-if="!isSchoolDay" class="text-gray-400 font-normal">วันหยุด</span>
-                                    <span v-else class="text-gray-400 font-normal">ยังไม่เช็คชื่อ</span>
-                                </td>
-                                <td class="p-4 text-center">
-                                    <div v-if="isSchoolDay && !student.todayStatus" class="flex gap-2 justify-center">
-                                        <button @click="markStatus(student, 'ลา')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow transition flex-1">ลา</button>
-                                        <button @click="markStatus(student, 'ขาด')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow transition flex-1">ขาด</button>
-                                    </div>
-                                    <div v-else-if="isSchoolDay && student.todayStatus" class="text-center text-sm text-gray-500 italic">บันทึกแล้ว</div>
-                                    <div v-else class="text-center text-sm text-gray-400 italic">-</div>
-                                </td>
-                                <td class="p-4 text-center border-l border-gray-100">
-                                    <div class="flex justify-center gap-1 text-xs font-bold">
-                                        <span class="bg-green-100 text-green-700 px-2 py-1 rounded" title="มาปกติ">{{ student.stats?.normal || 0 }}</span>
-                                        <span class="bg-orange-100 text-orange-700 px-2 py-1 rounded" title="มาสาย">{{ student.stats?.late || 0 }}</span>
-                                        <span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded" title="ลา">{{ student.stats?.leave || 0 }}</span>
-                                        <span class="bg-red-100 text-red-700 px-2 py-1 rounded" title="ขาด">{{ student.stats?.absent || 0 }}</span>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr v-if="myClassStudents.length === 0">
-                                <td colspan="8" class="p-8 text-center text-gray-500">ไม่พบข้อมูลนักเรียนในห้องนี้</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+          <div class="bg-white p-6 md:p-8 rounded-3xl shadow-lg border-t-8 border-orange-500 overflow-hidden relative">
+            
+            <div class="flex flex-wrap gap-2 mb-6 border-b pb-3">
+              <button @click="teacherSubTab = 'checkin'" :class="teacherSubTab === 'checkin' ? 'bg-orange-500 text-white font-bold shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'" class="px-5 py-2.5 rounded-xl transition flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-list-check"></i> บันทึกเข้าเรียนประจำวัน
+              </button>
+              <button @click="teacherSubTab = 'reports'; loadTeacherReportData();" :class="teacherSubTab === 'reports' ? 'bg-orange-500 text-white font-bold shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'" class="px-5 py-2.5 rounded-xl transition flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-file-pdf"></i> ดาวน์โหลดรายงาน
+              </button>
             </div>
+        
+            <div v-if="teacherSubTab === 'checkin'">
+              <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 gap-4">
+                <h2 class="text-2xl font-bold text-gray-800"><i class="fa-solid fa-list-check text-orange-500 mr-2"></i> เช็คชื่อ ม.{{ currentUser.classLevel }}</h2>
+                
+                <div class="flex flex-wrap items-center gap-3">
+                  <div class="relative">
+                    <input type="date" v-model="selectedDate" @change="loadTeacherClass" class="bg-gray-50 border border-gray-300 text-gray-700 px-3 py-2 rounded-lg font-bold outline-none focus:ring-2 focus:ring-orange-400 cursor-pointer shadow-sm">
+                  </div>
+                  <div v-if="!isSchoolDay" class="bg-gray-100 text-gray-500 px-3 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm border border-gray-200">
+                    <i class="fa-solid fa-mug-hot"></i> วันหยุด (ไม่มีการสแกน)
+                  </div>
+                  <div v-else-if="isSchoolDay && incompleteCount > 0" class="bg-red-100 text-red-600 px-3 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm border border-red-200 animate-pulse">
+                    <i class="fa-solid fa-triangle-exclamation"></i> ค้างเช็ค {{ incompleteCount }} คน
+                  </div>
+                  <div v-else class="bg-green-100 text-green-600 px-3 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm border border-green-200">
+                    <i class="fa-solid fa-check-double"></i> เช็คครบแล้ว
+                  </div>
+                  <button @click="findMissingChecks" class="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-2 rounded-lg font-bold transition flex items-center gap-2 shadow-sm">
+                    <i class="fa-solid fa-calendar-check"></i> วันค้างเช็ค
+                  </button>
+        
+                  <button @click="loadTeacherClass" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-lg font-bold transition flex items-center gap-2 shadow-sm">
+                    <i class="fa-solid fa-rotate-right"></i>
+                  </button>
+                </div>
+              </div>
+        
+              <div class="overflow-x-auto rounded-xl border border-gray-200">
+                <table class="w-full text-left border-collapse whitespace-nowrap">
+                  <thead>
+                    <tr class="bg-gray-100 text-gray-700 border-b border-gray-200">
+                      <th class="p-4 font-bold text-center w-24">เลขประจำตัว</th>
+                      <th class="p-4 font-bold">ชื่อ-นามสกุล</th>
+                      <th class="p-4 font-bold text-center w-16">ชั้น</th>
+                      <th class="p-4 font-bold text-center w-16">เลขที่</th>
+                      <th class="p-4 font-bold text-center">เวลามา</th>
+                      <th class="p-4 font-bold text-center">สถานะวันนี้</th>
+                      <th class="p-4 font-bold text-center w-40">จัดการ</th>
+                      <th class="p-4 font-bold text-center w-32 border-l border-gray-300">สถิติรวม (มา/สาย/ลา/ขาด)</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <tr v-for="student in myClassStudents" :key="student.id" class="hover:bg-orange-50 transition" :class="!isSchoolDay ? 'opacity-75 bg-gray-50' : ''">
+                      <td class="p-4 text-center text-gray-500">{{ student.id }}</td>
+                      <td class="p-4 font-bold text-gray-800">{{ student.name }}</td>
+                      <td class="p-4 text-center text-gray-600">ม.{{ student.classLevel }}</td>
+                      <td class="p-4 text-center font-bold text-gray-600">{{ student.number }}</td>
+                      <td class="p-4 text-center font-bold" :class="student.todayTime !== '-' && student.todayTime ? 'text-gray-800' : 'text-gray-400'">
+                        {{ student.todayTime || '-' }}
+                      </td>
+                      <td class="p-4 text-center font-bold" :class="getStatusColor(student.todayStatus)">
+                        <span v-if="student.todayStatus" class="flex items-center justify-center gap-1">
+                          <i class="fa-solid fa-circle text-[10px]"></i> {{ student.todayStatus }}
+                        </span>
+                        <span v-else-if="!isSchoolDay" class="text-gray-400 font-normal">วันหยุด</span>
+                        <span v-else class="text-gray-400 font-normal">ยังไม่เช็คชื่อ</span>
+                      </td>
+                      <td class="p-4 text-center">
+                        <div v-if="isSchoolDay && !student.todayStatus" class="flex gap-2 justify-center">
+                          <button @click="markStatus(student, 'ลา')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow transition flex-1">ลา</button>
+                          <button @click="markStatus(student, 'ขาด')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow transition flex-1">ขาด</button>
+                        </div>
+                        <div v-else-if="isSchoolDay && student.todayStatus" class="text-center text-sm text-gray-500 italic">บันทึกแล้ว</div>
+                        <div v-else class="text-center text-sm text-gray-400 italic">-</div>
+                      </td>
+                      <td class="p-4 text-center border-l border-gray-100">
+                        <div class="flex justify-center gap-1 text-xs font-bold">
+                          <span class="bg-green-100 text-green-700 px-2 py-1 rounded" title="มาปกติ">{{ student.stats?.normal || 0 }}</span>
+                          <span class="bg-orange-100 text-orange-700 px-2 py-1 rounded" title="มาสาย">{{ student.stats?.late || 0 }}</span>
+                          <span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded" title="ลา">{{ student.stats?.leave || 0 }}</span>
+                          <span class="bg-red-100 text-red-700 px-2 py-1 rounded" title="ขาด">{{ student.stats?.absent || 0 }}</span>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr v-if="myClassStudents.length === 0">
+                      <td colspan="8" class="p-8 text-center text-gray-500">ไม่พบข้อมูลนักเรียนในห้องนี้</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+        
+            <div v-if="teacherSubTab === 'reports'">
+              <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b pb-4">
+                <h2 class="text-xl font-bold text-gray-800"><i class="fa-solid fa-file-invoice text-orange-500 mr-2"></i> สรุปและดาวน์โหลดรายงานเข้าเรียน ม.{{ currentUser.classLevel }}</h2>
+                
+                <div class="flex flex-wrap items-center gap-3 bg-gray-50 p-3 rounded-2xl border shadow-sm w-full md:w-auto">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-gray-500">ตั้งแต่วันที่:</span>
+                    <input type="date" v-model="reportStartDate" @change="loadTeacherReportData" class="border p-1.5 rounded-lg text-sm bg-white cursor-pointer outline-none font-bold shadow-sm">
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-gray-500">ถึงวันที่:</span>
+                    <input type="date" v-model="reportEndDate" @change="loadTeacherReportData" class="border p-1.5 rounded-lg text-sm bg-white cursor-pointer outline-none font-bold shadow-sm">
+                  </div>
+                  <button @click="loadTeacherReportData" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow transition flex items-center gap-1 ml-auto">
+                    <i class="fa-solid fa-arrows-rotate"></i> อัปเดตข้อมูล
+                  </button>
+                </div>
+              </div>
+        
+              <div class="flex gap-4 mb-6 border-b">
+                <button @click="teacherReportTab = 'class'" :class="teacherReportTab === 'class' ? 'border-b-4 border-orange-500 text-orange-600 font-bold' : 'text-gray-500 font-medium'" class="px-4 py-2 text-sm transition">
+                  <i class="fa-solid fa-users mr-1"></i> 1.1 ดาวน์โหลดรายงานทั้งห้อง
+                </button>
+                <button @click="teacherReportTab = 'individual'" :class="teacherReportTab === 'individual' ? 'border-b-4 border-orange-500 text-orange-600 font-bold' : 'text-gray-500 font-medium'" class="px-4 py-2 text-sm transition">
+                  <i class="fa-solid fa-user-tag mr-1"></i> 1.2 ดาวน์โหลดเป็นรายบุคคล
+                </button>
+              </div>
+        
+              <div v-if="teacherReportTab === 'class'" class="space-y-4">
+                <div class="flex justify-between items-center bg-green-50 p-3 rounded-xl border border-green-200">
+                  <span class="text-sm font-bold text-green-800"><i class="fa-solid fa-circle-info mr-1"></i> ตารางนี้แสดงสถิติรวมของนักเรียนแยกเป็นรายคนในช่วงเวลาที่กำหนด</span>
+                  <button @click="exportClassReportPDF" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition shadow-lg flex items-center gap-2">
+                    <i class="fa-solid fa-file-pdf"></i> ออกรายงานทั้งห้อง (PDF)
+                  </button>
+                </div>
+                <div class="overflow-x-auto rounded-xl border border-gray-200">
+                  <table class="w-full text-left border-collapse text-sm whitespace-nowrap">
+                    <thead>
+                      <tr class="bg-gray-100 text-gray-700 border-b border-gray-200">
+                        <th class="p-3 font-bold text-center">เลขประจำตัว</th>
+                        <th class="p-3 font-bold">ชื่อ - นามสกุล</th>
+                        <th class="p-3 font-bold text-center">ชั้น</th>
+                        <th class="p-3 font-bold text-center">เลขที่</th>
+                        <th class="p-3 font-bold text-center text-green-600">มา</th>
+                        <th class="p-3 font-bold text-center text-orange-500">สาย</th>
+                        <th class="p-3 font-bold text-center text-blue-600">ลา</th>
+                        <th class="p-3 font-bold text-center text-red-600">ขาด</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                      <tr v-for="s in reportClassData" :key="s.id" class="hover:bg-gray-50 transition">
+                        <td class="p-3 text-center text-gray-600 font-medium">{{ s.id }}</td>
+                        <td class="p-3 font-bold text-gray-800">{{ s.name }}</td>
+                        <td class="p-3 text-center text-gray-600">ม.{{ s.classLevel }}</td>
+                        <td class="p-3 text-center font-bold text-gray-600">{{ s.number || '-' }}</td>
+                        <td class="p-3 text-center font-bold text-green-600">{{ s.reportStats?.normal || 0 }}</td>
+                        <td class="p-3 text-center font-bold text-orange-500">{{ s.reportStats?.late || 0 }}</td>
+                        <td class="p-3 text-center font-bold text-blue-600">{{ s.reportStats?.leave || 0 }}</td>
+                        <td class="p-3 text-center font-bold text-red-600">{{ s.reportStats?.absent || 0 }}</td>
+                      </tr>
+                      <tr v-if="reportClassData.length === 0">
+                        <td colspan="8" class="p-8 text-center text-gray-500">ไม่พบข้อมูล กรุณาเลือกช่วงเวลาอื่น</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+        
+              <div v-if="teacherReportTab === 'individual'" class="overflow-x-auto rounded-xl border border-gray-200">
+                <table class="w-full text-left border-collapse text-sm whitespace-nowrap">
+                  <thead>
+                    <tr class="bg-gray-100 text-gray-700 border-b border-gray-200">
+                      <th class="p-4 font-bold text-center w-28">เลขประจำตัว</th>
+                      <th class="p-4 font-bold">ชื่อ-นามสกุล</th>
+                      <th class="p-4 font-bold text-center w-20">ชั้น</th>
+                      <th class="p-4 font-bold text-center w-20">เลขที่</th>
+                      <th class="p-4 font-bold text-center w-40">พิมพ์เอกสาร</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <tr v-for="s in reportClassData" :key="s.id" class="hover:bg-gray-50 transition">
+                      <td class="p-4 text-center text-gray-600 font-medium">{{ s.id }}</td>
+                      <td class="p-4 font-bold text-gray-800">{{ s.name }}</td>
+                      <td class="p-4 text-center text-gray-600">ม.{{ s.classLevel }}</td>
+                      <td class="p-4 text-center font-bold text-gray-600">{{ s.number || '-' }}</td>
+                      <td class="p-4 text-center">
+                        <button @click="exportIndividualReportPDF(s)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow transition flex items-center gap-1 mx-auto">
+                          <i class="fa-solid fa-cloud-arrow-down"></i> ดาวน์โหลด PDF
+                        </button>
+                      </td>
+                    </tr>
+                    <tr v-if="reportClassData.length === 0">
+                      <td colspan="5" class="p-8 text-center text-gray-500">ไม่พบข้อมูลรายชื่อนักเรียนในห้องนี้</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+        
+            </div>
+        
+          </div>
         </div>
 
         <!-- ================= ADMIN DASHBOARD ================= -->
@@ -673,8 +780,8 @@ data() {
     videoStream: null,
     isScanning: false,
     studentMap: {},
-    scannedTodayIn: new Set(),  // สำหรับเก็บประวัติการสแกนเข้ารอบเช้า
-    scannedTodayOut: new Set(), // สำหรับเก็บประวัติการสแกนออกรอบเย็น
+    scannedTodayIn: new Set(),
+    scannedTodayOut: new Set(),
     recentScans: [],
     cooldowns: {},
     matchCounters: {}, // ตัวแปรสำหรับเก็บจำนวนเฟรมยืนยันตัวตน
@@ -684,17 +791,22 @@ data() {
     showParentSettings: false,
     parentSettingsForm: { parentUsername: '', parentPassword: '', telegramChatId: '' },
 
-    // Teacher Data
+    // Teacher Data (มีการเพิ่มตัวแปรเพื่อระบบรายงานย่อย)
     myClassStudents: [],
     selectedDate: new Date().toISOString().split('T')[0],
     isSchoolDay: true,
+    teacherSubTab: 'checkin',      // ควบคุมแท็บหลักของครู: 'checkin' (เช็คชื่อ) หรือ 'reports' (ดาวน์โหลดรายงาน)
+    teacherReportTab: 'class',     // ควบคุมเมนูรายงานย่อย: 'class' (สรุปทั้งห้อง 1.1) หรือ 'individual' (รายบุคคล 1.2)
+    reportStartDate: new Date().toISOString().split('T')[0], // วันที่เริ่มต้นช่วงเวลาสรุป
+    reportEndDate: new Date().toISOString().split('T')[0],   // วันที่สิ้นสุดช่วงเวลาสรุป
+    reportClassData: [],           // อาร์เรย์สำหรับเก็บผลรวมสถิติสแกนในช่วงเวลาที่ครูเลือก
 
     // Admin Data
     adminSubTab: 'students',
     adminData: { students: [], teachers: [] },
     scanFilter: { search: '', classLevel: '' },
 
-    // System Settings (ตัวแปรใหม่สำหรับตั้งเวลาสแกน)
+    // System Settings
     systemSettings: { 
       checkInStart: '06:00', 
       checkInEnd: '10:00', 
@@ -742,13 +854,16 @@ data() {
         };
     },
     watch: {
-        currentTab(newTab) {
-            this.stopVideo();
-            if (newTab === 'scan') this.startScanSystem('videoInput');
-            if (newTab === 'adminDashboard') this.loadAdminData();
-            if (newTab === 'teacherDashboard') this.loadTeacherClass();
-            if (newTab === 'parentDashboard') this.loadParentData();
+      currentTab(newTab) {
+        this.stopVideo();
+        if (newTab === 'scan') this.startScanSystem('videoInput');
+        if (newTab === 'adminDashboard') this.loadAdminData();
+        if (newTab === 'teacherDashboard') {
+          this.teacherSubTab = 'checkin'; // เมื่อครูเข้าระบบ ให้เปิดหน้าเช็คชื่อก่อนเสมอ
+          this.loadTeacherClass();
         }
+        if (newTab === 'parentDashboard') this.loadParentData();
+      }
     },
     methods: {
         async autoSetupDatabase() {
@@ -1490,6 +1605,236 @@ data() {
             } catch(e) { Swal.fire('เกิดข้อผิดพลาด', e.message, 'error'); }
         }
     }
+    // ==================== FUNCTIONS FOR PDF REPORT SYSTEM ====================
+
+async loadTeacherReportData() {
+  Swal.fire({ title: 'กำลังประมวลผลข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+  try {
+    const sSnap = await get(ref(db, 'students'));
+    if(!sSnap.exists()) { this.reportClassData = []; Swal.close(); return; }
+
+    let students = [];
+    sSnap.forEach(child => {
+      if(String(child.val().classLevel) === String(this.currentUser.classLevel)) {
+        students.push({ key: child.key, ...child.val() });
+      }
+    });
+
+    const attSnap = await get(ref(db, 'attendance'));
+    
+    // ตั้งค่าเริ่มต้นสถิติและเตรียมเก็บข้อมูลรายวันให้นักเรียนทุกคน
+    students.forEach(s => {
+      s.reportStats = { normal: 0, late: 0, leave: 0, absent: 0 };
+      s.detailedHistory = {}; // สำหรับเก็บ log รายวันไปดึงออกรายงานเดี่ยว
+    });
+
+    if (attSnap.exists()) {
+      attSnap.forEach(c => {
+        const rec = c.val();
+        
+        // กรองเฉพาะข้อมูลที่อยู่ในช่วงวันที่ที่ครูเลือก และตรงกับระดับชั้นของครู
+        if (rec.date >= this.reportStartDate && rec.date <= this.reportEndDate && String(rec.classLevel) === String(this.currentUser.classLevel)) {
+          const student = students.find(s => String(s.id) === String(rec.studentId));
+          if (student) {
+            if (!student.detailedHistory[rec.date]) {
+              student.detailedHistory[rec.date] = { inTime: '-', outTime: '-', inStatus: '-', outStatus: 'ไม่สแกนออก (กลับก่อน)' };
+            }
+
+            if (rec.scanType === 'ออก') {
+              student.detailedHistory[rec.date].outTime = rec.time;
+              student.detailedHistory[rec.date].outStatus = 'กลับตรงเวลา';
+            } else {
+              // การสแกนรอบเช้า หรือบันทึกขาดลาโดยครู
+              student.detailedHistory[rec.date].inTime = rec.time !== '-' ? rec.time : 'ไม่ได้สแกน';
+              
+              if (rec.status === 'มาปกติ') {
+                student.reportStats.normal++;
+                student.detailedHistory[rec.date].inStatus = 'มาตรงเวลา';
+              } else if (rec.status === 'มาสาย') {
+                student.reportStats.late++;
+                student.detailedHistory[rec.date].inStatus = 'มาสาย';
+              } else if (rec.status === 'ลา') {
+                student.reportStats.leave++;
+                student.detailedHistory[rec.date].inStatus = 'ลา';
+                student.detailedHistory[rec.date].outStatus = 'ลา';
+              } else if (rec.status === 'ขาด') {
+                student.reportStats.absent++;
+                student.detailedHistory[rec.date].inStatus = 'ขาด';
+                student.detailedHistory[rec.date].outStatus = 'ขาด';
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // ทำความสะอาดข้อมูล: กรณีวันไหนไม่มีข้อมูลสแกนเลย (เช่น วันหยุดหรือครูยังไม่เช็คชื่อ) จะไม่ให้แสดงคำว่า กลับก่อน
+    students.forEach(student => {
+      Object.keys(student.detailedHistory).forEach(date => {
+        const dayLog = student.detailedHistory[date];
+        if (!dayLog.inStatus || dayLog.inStatus === '-') {
+          delete student.detailedHistory[date];
+        }
+      });
+    });
+
+    // จัดเรียงลำดับตามเลขที่นักเรียน
+    this.reportClassData = students.sort((a,b) => parseInt(a.number || '0', 10) - parseInt(b.number || '0', 10));
+    Swal.close();
+  } catch(e) { 
+    Swal.fire('ข้อผิดพลาด', e.message, 'error'); 
+  }
+},
+
+exportClassReportPDF() {
+  if (this.reportClassData.length === 0) {
+    return Swal.fire('คำเตือน', 'ไม่มีข้อมูลสรุปสำหรับจัดส่งรายงาน', 'warning');
+  }
+
+  let rowsHtml = '';
+  this.reportClassData.forEach(s => {
+    rowsHtml += `
+      <tr style="border-bottom: 1px solid #e2e8f0; text-align: center; font-size: 13px;">
+        <td style="padding: 10px; color:#4a5568;">${s.id}</td>
+        <td style="padding: 10px; text-align: left; font-weight: bold; color:#2d3748;">${s.name}</td>
+        <td style="padding: 10px; color:#4a5568;">ม.${s.classLevel}</td>
+        <td style="padding: 10px; font-weight: bold; color:#4a5568;">${s.number || '-'}</td>
+        <td style="padding: 10px; color:#16a34a; font-weight: bold;">${s.reportStats.normal}</td>
+        <td style="padding: 10px; color:#ea580c; font-weight: bold;">${s.reportStats.late}</td>
+        <td style="padding: 10px; color:#2563eb; font-weight: bold;">${s.reportStats.leave}</td>
+        <td style="padding: 10px; color:#dc2626; font-weight: bold;">${s.reportStats.absent}</td>
+      </tr>
+    `;
+  });
+
+  const printArea = document.createElement('div');
+  printArea.innerHTML = `
+    <div style="font-family: 'Sarabun', sans-serif; padding: 25px; color: #1a202c; background: #fff;">
+      <h2 style="text-align: center; margin-bottom: 6px; color: #1e3a8a; font-size: 22px; font-weight: 700;">รายงานสถิติการเข้าเรียนสรุปทั้งห้อง (1.1)</h2>
+      <h3 style="text-align: center; margin-top: 0; color: #4a5568; font-size: 16px; font-weight: 600;">โรงเรียนวังน้ำเย็นวิทยาคม ชั้น ม.${this.currentUser.classLevel}</h3>
+      <p style="text-align: center; font-size: 13px; color: #718096; margin-bottom: 25px;">
+        <b>ช่วงเวลาสรุป:</b> ${this.formatDate(this.reportStartDate)} ถึง ${this.formatDate(this.reportEndDate)}
+      </p>
+      
+      <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+        <thead>
+          <tr style="background-color: #f7fafc; border-top: 1px solid #cbd5e0; border-bottom: 2px solid #cbd5e0; text-align: center; font-weight: bold; font-size: 14px; color: #2d3748;">
+            <td style="padding: 12px; width: 15%;">รหัสประจำตัว</td>
+            <td style="padding: 12px; text-align: left; width: 35%;">ชื่อ - นามสกุล</td>
+            <td style="padding: 12px; width: 10%;">ชั้น</td>
+            <td style="padding: 12px; width: 10%;">เลขที่</td>
+            <td style="padding: 12px; width: 5%; color:#16a34a;">มา</td>
+            <td style="padding: 12px; width: 5%; color:#ea580c;">สาย</td>
+            <td style="padding: 12px; width: 5%; color:#2563eb;">ลา</td>
+            <td style="padding: 12px; width: 5%; color:#dc2626;">ขาด</td>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+      
+      <div style="text-align: right; margin-top: 40px; font-size: 12px; color: #a0aec0; border-top: 1px solid #edf2f7; padding-top: 15px;">
+        ออกเอกสารอัตโนมัติ ณ วันที่: ${new Date().toLocaleDateString('th-TH')} | ครูประจำชั้นผู้ตรวจสอบ: ${this.currentUser.name}
+      </div>
+    </div>
+  `;
+
+  const config = {
+    margin:       12,
+    filename:     `รายงานสถิติห้อง_ม_${this.currentUser.classLevel}_พิมพ์รวม.pdf`,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  html2pdf().from(printArea).set(config).save();
+},
+
+exportIndividualReportPDF(student) {
+  const dates = Object.keys(student.detailedHistory).sort((a, b) => new Date(a) - new Date(b));
+  if (dates.length === 0) {
+    return Swal.fire('ไม่พบข้อมูล', 'ไม่มีประวัติสแกนเช้าหรือเย็นของนักเรียนรายนี้ในช่วงเวลาที่เลือก', 'info');
+  }
+
+  let tableRowsHtml = '';
+  dates.forEach(date => {
+    const log = student.detailedHistory[date];
+    
+    // ตั้งค่าสีสถานะการมา
+    let inColor = "#2d3748";
+    if(log.inStatus === 'มาตรงเวลา') inColor = "#16a34a";
+    else if(log.inStatus === 'มาสาย') inColor = "#ea580c";
+    else if(log.inStatus === 'ขาด' || log.inStatus === 'ลา') inColor = "#dc2626";
+
+    // ตั้งค่าสีสถานะกลับ
+    let outColor = log.outStatus === 'กลับตรงเวลา' ? "#16a34a" : "#dc2626";
+    if(log.inStatus === 'ขาด' || log.inStatus === 'ลา') outColor = "#dc2626";
+
+    tableRowsHtml += `
+      <tr style="border-bottom: 1px solid #edf2f7; text-align: center; font-size: 13px;">
+        <td style="padding: 10px; color:#4a5568;">${this.formatDate(date)}</td>
+        <td style="padding: 10px; font-weight: bold; color:#2d3748;">${log.inTime}</td>
+        <td style="padding: 10px; font-weight: bold; color:#2d3748;">${log.outTime}</td>
+        <td style="padding: 10px; font-weight: bold; color: ${inColor};">${log.inStatus || '-'}</td>
+        <td style="padding: 10px; font-weight: bold; color: ${outColor};">${log.outStatus || '-'}</td>
+      </tr>
+    `;
+  });
+
+  const printArea = document.createElement('div');
+  printArea.innerHTML = `
+    <div style="font-family: 'Sarabun', sans-serif; padding: 25px; color: #1a202c; background: #fff;">
+      <h2 style="text-align: center; margin-bottom: 5px; color: #0f766e; font-size: 22px; font-weight: 700;">รายงานประวัติสแกนเข้า-ออกเรียนรายบุคคล (1.2)</h2>
+      <h3 style="text-align: center; margin-top: 0; color: #4a5568; font-size: 15px; font-weight: 500;">โรงเรียนวังน้ำเย็นวิทยาคม</h3>
+      
+      <div style="background-color: #f0fdf4; border: 1px solid #ccfbf1; padding: 16px; border-radius: 12px; margin-top: 20px; margin-bottom: 25px; font-size: 14px; line-height: 1.6;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="width: 50%;"><b>เลขประจำตัวนักเรียน:</b> ${student.id}</td>
+            <td style="width: 50%;"><b>ชื่อ - นามสกุล:</b> ${student.name}</td>
+          </tr>
+          <tr>
+            <td><b>ระดับชั้นเรียน:</b> มัธยมศึกษาปีที่ ${student.classLevel}</td>
+            <td><b>เลขที่ห้องเรียน:</b> เลขที่ ${student.number || '-'}</td>
+          </tr>
+          <tr>
+            <td colspan="2" style="padding-top: 4px; color:#0f766e;"><b>ระยะเวลารายงาน:</b> ${this.formatDate(this.reportStartDate)} ถึง ${this.formatDate(this.reportEndDate)}</td>
+          </tr>
+        </table>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; border-bottom: 2px solid #cbd5e0; text-align: center; font-weight: bold; font-size: 13px; color: #334155;">
+            <td style="padding: 12px; width: 24%;">วันที่ตรวจสอบ</td>
+            <td style="padding: 12px; width: 16%;">เวลามา (เช้า)</td>
+            <td style="padding: 12px; width: 16%;">เวลากลับ (เย็น)</td>
+            <td style="padding: 12px; width: 22%;">สถานะการมา</td>
+            <td style="padding: 12px; width: 22%;">สถานะการกลับ</td>
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRowsHtml}
+        </tbody>
+      </table>
+      
+      <div style="text-align: right; margin-top: 45px; font-size: 12px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 15px;">
+        ยืนยันความถูกต้องโดยครูที่ปรึกษา: ${this.currentUser.name} | พิมพ์เอกสารเมื่อ: ${new Date().toLocaleDateString('th-TH')} น.
+      </div>
+    </div>
+  `;
+
+  const config = {
+    margin:       12,
+    filename:     `รายงานรายบุคคล_${student.id}_${student.name}.pdf`,
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  html2pdf().from(printArea).set(config).save();
+}
 });
 
 myApp.mount('#app');
